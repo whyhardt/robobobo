@@ -165,20 +165,37 @@ def get_butterworth(x, dx, t, max_freq, n_filters=3, save=False, save_path=None,
                                                                                                'bandpass': (b_band, a_band)}
 
 
-def moving_average(x, win_len, dtype=np.array):
-    filtered = np.zeros_like(x)
+def moving_average(x, win_len, dtype=np.array, mode='same'):
+    filtered = np.zeros((x.shape[0]-win_len+1, x.shape[1]))
 
     if len(x.shape) == 2:
         for i in range(x.shape[-1]):
-            filtered[:, i] = np.convolve(x[:, i], np.ones(win_len) / win_len, 'same')
+            filtered[:, i] = np.convolve(x[:, i], np.ones(win_len) / win_len, 'valid')
     elif len(x.shape) == 3:
         for batch in range(x.shape[0]):
             for array in range(x.shape[-1]):
-                filtered[batch, :, array] = np.convolve(x[batch, :, array], np.ones(win_len) / win_len, 'same')
+                filtered[batch, :, array] = np.convolve(x[batch, :, array], np.ones(win_len) / win_len, 'valid')
     elif len(x.shape) == 1:
-        filtered = np.convolve(x, np.ones(win_len) / win_len, 'same')
+        filtered = np.convolve(x, np.ones(win_len) / win_len, 'valid')
     else:
         raise ValueError("x must be a 1D (sequence), 2D (sequence, features) or 3D (batch, sequence, features) array")
+
+    if mode == 'same':
+        # adapting the window length of the to the remaining fragments at the beginning and end of the signal
+        pad_before = np.zeros((win_len//2, x.shape[1]))
+        pad_after = np.zeros((win_len//2, x.shape[1]))
+
+        for i in range(win_len//2):
+            pad_before[i] = np.mean(x[:i*2+1], axis=0)
+            pad_after[i] = np.mean(x[-(i*2+1):], axis=0)
+        # pad_before = np.flip(pad_before, axis=0)
+        pad_after = np.flip(pad_after, axis=0)
+
+        filtered = np.concatenate((pad_before, filtered, pad_after), axis=0)
+
+        if filtered.shape[0] > x.shape[0]:
+            filtered = filtered[1:]
+
     if dtype == np.array:
         return filtered
     elif dtype == torch.Tensor:
@@ -186,11 +203,11 @@ def moving_average(x, win_len, dtype=np.array):
 
 
 if __name__ == "__main__":
-    seq_len = (30, 100, 300, 500)
+    seq_len = [50]
     n_filters = 3
     threshold = 0.005
     plot = True
-    plot_index = 500
+    plot_index = 0#500
     save = False
     dataset_path = r'..\stock_data\stocks_sp500_2010_2020.csv'
 
@@ -200,13 +217,13 @@ if __name__ == "__main__":
     for sl in seq_len:
         dataset, _, _ = create_dataloader(dataset_path, sl, 32, train_ratio=1, standardize=False, differentiate=False)
         dataset = dataset.dataset.data[0]
-        x = dataset.detach().numpy()
+        x = dataset.squeeze(0).detach().numpy()
 
         t = np.linspace(0, 1, len(x))
 
         # get the gradient of the signal
-        dx = np.diff(x, axis=0)
-        dx = np.concatenate((dx, dx[-1].reshape(1, -1)), axis=0)
+        # dx = np.diff(x, axis=0)
+        # dx = np.concatenate((dx, dx[-1].reshape(1, -1)), axis=0)
         # normalize dx to be between -1 and 1
         # dx = (dx / np.max(np.abs(dx)) + 1) / 2
 
@@ -216,22 +233,42 @@ if __name__ == "__main__":
         # x_filt, dx_filt, cf_dict = get_butterworth(x, t, dx)
 
         # test moving average filters on the signal
-        win_len = (10, 20, 50, 100, 200)
-        try:
-            for wl in win_len:
-                dx_filt = np.zeros(x.shape)
-                for i in range(x.shape[1]):
-                    dx_filt[:, i] = moving_average(dx[:, i], wl)
-                fig, axs = plt.subplots(5, 2)
-                for i in range(5):
-                    axs[i, 0].plot(dx[:, i], label='original')
-                    axs[i, 0].plot(t, dx_filt[:, i], label='filtered')
-                    axs[i, 1].plot(t, np.cumsum(dx[:, i], axis=0), label='original')
-                    axs[i, 1].plot(t, np.cumsum(dx_filt[:, i], axis=0), label='filtered')
+        win_len = [50]
+        # try:
+        for wl in win_len:
+            # dx_filt = np.zeros(x.shape)
+            # for i in range(x.shape[1]):
+            x_filt = moving_average(x, np.min((wl, len(x))))
+            # x_filt = torch.from_numpy(np.cumsum(dx_filt, axis=0)).float()
+
+            # fig, axs = plt.subplots(5, 2)
+            # for i in range(5):
+            #     axs[i, 0].plot(dx[:, i], label='original')
+            #     axs[i, 0].plot(t, dx_filt[:, i], label='filtered')
+            #     axs[i, 1].plot(t, np.cumsum(dx[:, i], axis=0), label='original')
+            #     axs[i, 1].plot(t, np.cumsum(dx_filt[:, i], axis=0), label='filtered')
+            # plt.xlabel('Time (s)')
+            # plt.ylabel('Amplitude')
+            # plt.title(f"seq length: {sl}; window length: {wl}")
+            # plt.legend()
+            # plt.show()
+
+            if plot:
+                # plot the original signal and the filtered signal
+                plt.plot(x[:200, plot_index], label='original')
+                plt.plot(x_filt[:200, plot_index], label='filtered')
                 plt.xlabel('Time (s)')
                 plt.ylabel('Amplitude')
                 plt.title(f"seq length: {sl}; window length: {wl}")
                 plt.legend()
                 plt.show()
-        except:
-            print(f"seq length: {sl}; window length: {wl} failed")
+
+            if save:
+                df = pd.read_csv(dataset_path, index_col=0)
+                df_col = df.columns
+                df_idx = df.index
+                df = pd.DataFrame(x_filt, columns=df_col, index=df_idx)
+                df.to_csv(f"../stock_data/stocks_sp500_2010_2020_mvgavg{wl}.csv")
+        # except:
+        #     print(f"seq length: {sl}; window length: {wl} failed")
+

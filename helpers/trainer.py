@@ -54,10 +54,24 @@ class Trainer:
         self.prev_g_loss = 0
         self.configuration = {
             'device': self.device,
-            'generator': str(self.generator.__class__.__name__),
-            'discriminator': str(self.discriminator.__class__.__name__),
+            'generator': {
+                'class': str(self.generator.__class__.__name__),
+                'latent_dim': generator.latent_dim,
+                'channels': generator.channels,
+                'seq_len': generator.seq_len,
+                'hidden_dim': generator.hidden_dim,
+                'num_layers': generator.num_layers,
+                'num_heads': generator.num_heads,
+            },
+            'discriminator': {
+                'class': str(self.discriminator.__class__.__name__),
+                'channels': discriminator.channels,
+                'n_classes': discriminator.n_classes,
+                'hidden_dim': discriminator.hidden_dim,
+                'num_layers': discriminator.num_layers,
+                'num_heads': discriminator.num_heads,
+            },
             'sequence_length': self.sequence_length,
-            'sequence_length_generated': self.sequence_length_generated,
             'batch_size': self.batch_size,
             'epochs': self.epochs,
             'sample_interval': self.sample_interval,

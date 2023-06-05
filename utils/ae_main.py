@@ -8,7 +8,7 @@ import torch
 
 from utils.ae_dataloader import create_dataloader
 from utils.get_filter import moving_average as filter
-from nn_architecture.transformer_autoencoder import TransformerAutoencoder_v0, save, train
+from nn_architecture.transformer_autoencoder import TransformerAutoencoder, save, train
 
 if __name__ == '__main__':
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     # create the model
     if cfg["model"]["input_dim"] is None:
         cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[2]
-    model = TransformerAutoencoder_v0(**cfg["model"])
+    model = TransformerAutoencoder(**cfg["model"])
 
     # create the optimizer and criterion
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["training"]["lr"])

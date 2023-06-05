@@ -1,5 +1,5 @@
 from typing import Optional
-
+import math
 from nn_architecture.ttsgan_components import *
 
 
@@ -306,28 +306,144 @@ class TransformerGenerator(nn.Module):
         return sample
 
 
-class TransformerDiscriminator(nn.Module):
-    def __init__(self, channels_in, seq_len, channels_out=1, hidden_dim=256, num_layers=2, dropout=.1, **kwargs):
-        super(TransformerDiscriminator, self).__init__()
+class TransformerGenerator2(nn.Module):
+    def __init__(self, latent_dim, channels, seq_len, hidden_dim=256, num_layers=2, num_heads=8, dropout=.1,
+                 decoder: Optional[nn.Module] = None, **kwargs):
+        super(TransformerGenerator2, self).__init__()
 
-        # self.hidden_dim = hidden_dim
-        self.channels_in = channels_in
-        self.channels_out = channels_out
+        self.latent_dim = latent_dim
+        self.hidden_dim = hidden_dim
+        self.channels = channels
         self.seq_len = seq_len
+        self.num_heads = num_heads
+        self.num_layers = num_layers
 
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.channels_out, nhead=5, dim_feedforward=hidden_dim,
-                                                        dropout=dropout)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.pe = PositionalEncoder(batch_first=True, d_model=latent_dim)
+        # self.linear_enc_in = nn.Linear(latent_dim, hidden_dim)
+        self.linear_enc_in = nn.LSTM(latent_dim, hidden_dim, batch_first=True, dropout=dropout, num_layers=2)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, dim_feedforward=hidden_dim,
+                                                        dropout=dropout, batch_first=True)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        self.linear_enc_out = nn.Linear(hidden_dim, channels * seq_len)
+        self.tanh = nn.Tanh()
 
-        self.l1 = nn.Linear(self.channels_in*self.seq_len, self.channels_out * self.seq_len)
-
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.seq_len, self.channels_out))
-
-        self.l2 = nn.Linear(self.seq_len*self.channels_out, self.channels_out)
+        # self.decoder = decoder if decoder is not None else nn.Identity()
+        # for param in self.decoder.parameters():
+        #    param.requires_grad = False
 
     def forward(self, data):
-        x = self.l1(data.squeeze(2).view(-1, self.seq_len*self.channels_in)).view(-1, self.seq_len, self.channels_out)
-        x += self.pos_embed
-        x = self.encoder(x)#.unsqueeze(2).permute(0, 3, 2, 1)
-        x = self.l2(x.view(-1, self.seq_len*self.channels_out))
-        return x
+        x = self.pe(data.to(self.device))
+        x = self.linear_enc_in(x)[0]
+        x = self.encoder(x)
+        x = self.linear_enc_out(x)[:, -1].reshape(-1, self.seq_len, self.channels)
+        x = self.mask(x, data[:, :, self.latent_dim - self.channels:].diff(dim=1))
+        x = self.tanh(x)
+        # x = self.decoder(x)
+        return x  # .unsqueeze(2).permute(0, 3, 2, 1)
+
+    def mask(self, data, data_ref, mask=0):
+        # mask predictions if ALL preceding values (axis=sequence) were 'mask'
+        # return indices to mask
+        mask_index = (data_ref.sum(dim=1) == mask).unsqueeze(1).repeat(1, data.shape[1], 1)
+        data[mask_index] = mask
+        return data
+
+
+class TransformerDiscriminator(nn.Module):
+    def __init__(self, channels, n_classes=1, hidden_dim=256, num_layers=2, num_heads=8, dropout=.1, **kwargs):
+        super(TransformerDiscriminator, self).__init__()
+
+        self.hidden_dim = hidden_dim
+        self.channels = channels
+        self.n_classes = n_classes
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.num_layers = num_layers
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.pe = PositionalEncoder(batch_first=True, d_model=channels)
+        self.linear_enc_in = nn.Linear(channels, hidden_dim)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, dim_feedforward=hidden_dim,
+                                                        dropout=dropout, batch_first=True)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        self.linear_enc_out = nn.Linear(hidden_dim, n_classes)
+        self.tanh = nn.Tanh()
+
+        # self.decoder = decoder if decoder is not None else nn.Identity()
+        # for param in self.decoder.parameters():
+        #    param.requires_grad = False
+
+    def forward(self, data):
+        x = self.pe(data.to(self.device))
+        x = self.linear_enc_in(x)
+        x = self.encoder(x)
+        x = self.linear_enc_out(x)[:, -1]  # .reshape(-1, self.channels)
+        # x = self.mask(x, data[:,:,self.latent_dim-self.channels:].diff(dim=1))
+        x = self.tanh(x)
+        # x = self.decoder(x)
+        return x  # .unsqueeze(2).permute(0, 3, 2, 1)
+
+
+class PositionalEncoder(nn.Module):
+    """
+    The authors of the original transformer paper describe very succinctly what
+    the positional encoding layer does and why it is needed:
+
+    "Since our model contains no recurrence and no convolution, in order for the
+    model to make use of the order of the sequence, we must inject some
+    information about the relative or absolute position of the tokens in the
+    sequence." (Vaswani et al, 2017)
+    Adapted from:
+    https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+    """
+
+    def __init__(
+            self,
+            dropout: float = 0.1,
+            max_seq_len: int = 5000,
+            d_model: int = 512,
+            batch_first: bool = True
+    ):
+        """
+        Parameters:
+            dropout: the dropout rate
+            max_seq_len: the maximum length of the input sequences
+            d_model: The dimension of the output of sub-layers in the model
+                     (Vaswani et al, 2017)
+        """
+
+        super().__init__()
+
+        self.d_model = d_model
+
+        self.dropout = nn.Dropout(p=dropout)
+
+        self.batch_first = batch_first
+
+        self.x_dim = 1 if batch_first else 0
+
+        # copy pasted from PyTorch tutorial
+        position = torch.arange(max_seq_len).unsqueeze(1)
+        # print(f"shape of position is {position.shape}")
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        # print(f"shape of div_term is {div_term.shape}")
+        pe = torch.zeros(1, max_seq_len, d_model)
+
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+
+        pe[0, :, 1::2] = torch.cos(position * div_term)
+
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Args:
+            x: Tensor, shape [batch_size, enc_seq_len, dim_val] or
+               [enc_seq_len, batch_size, dim_val]
+        """
+        x = x + self.pe[0, :x.size(self.x_dim)]
+
+        return self.dropout(x)

@@ -52,6 +52,43 @@ class WassersteinLoss(Loss):
 
 
 class WassersteinGradientPenaltyLoss(WassersteinLoss):
+    def __init__(self, gradient_penalty_weight=10):
+        super().__init__(wgan=False)
+        self.gradient_penalty_weight = 0
+
+    def set_lambda_gp(self, lambda_gp):
+        self.gradient_penalty_weight = lambda_gp
+
+    def discriminator(self, *args):
+        real, fake, discriminator, real_images, fake_images = args
+        return super().discriminator(real, fake) + self._gradient_penalty(discriminator, real_images, fake_images)
+
+    def _gradient_penalty(self, critic, real_samples, fake_samples):
+        batch_size = real_samples.size(0)
+        device = real_samples.device
+
+        # Generate random epsilon
+        epsilon = torch.rand(batch_size, 1, 1, device=device, requires_grad=True)
+
+        # Interpolate between real and fake samples
+        interpolated_samples = epsilon * real_samples + (1 - epsilon) * fake_samples
+        interpolated_samples = torch.autograd.Variable(interpolated_samples, requires_grad=True)
+
+        # Calculate critic scores for interpolated samples
+        critic_scores = critic(interpolated_samples)
+
+        # Compute gradients of critic scores with respect to interpolated samples
+        gradients = torch.autograd.grad(outputs=critic_scores, inputs=interpolated_samples,
+                                        grad_outputs=torch.ones(critic_scores.size(), device=device),
+                                        create_graph=True, retain_graph=True)[0]
+
+        # Calculate gradient penalty
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * self.gradient_penalty_weight
+
+        return gradient_penalty
+
+
+class WassersteinGradientPenaltyLoss_v0(WassersteinLoss):
     def __init__(self):
         super().__init__(wgan=False)
         self.lambda_gp = 0

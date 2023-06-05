@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from utils.get_filter import moving_average as filter
+# from utils.get_filter import moving_average as filter
 
 
 class TransformerAutoencoder(nn.Module):
@@ -33,18 +33,20 @@ class TransformerAutoencoder(nn.Module):
         self.tanh = nn.Tanh()
 
     def forward(self, data):
-        x = self.tanh(self.encode(data.to(self.device)))
-        x = self.tanh(self.decode(x))
+        x = self.encode(data.to(self.device))
+        x = self.decode(x)
         return x
 
     def encode(self, data):
         x = self.encoder(data.to(self.device))
         x = self.linear_enc(x)
+        x = self.tanh(x)
         return x
 
     def decode(self, encoded):
         x = self.decoder(encoded)
         x = self.linear_dec(x)
+        x = self.tanh(x)
         return x
 
     def save(self, path):
@@ -140,7 +142,7 @@ def train_model(model, dataloader, optimizer, criterion):
     for batch in dataloader:
         optimizer.zero_grad()
         inputs = batch.float()
-        inputs = filter(inputs.detach().cpu().numpy(), win_len=random.randint(29, 50), dtype=torch.Tensor)
+        # inputs = filter(inputs.detach().cpu().numpy(), win_len=random.randint(29, 50), dtype=torch.Tensor)
         outputs = model(inputs.to(model.device))
         loss = criterion(outputs, inputs)
         loss.backward()
