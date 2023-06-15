@@ -29,7 +29,7 @@ class ReplayBuffer:
 
     def push(self, state, action, reward, next_state, done):
         """push new experience into buffer"""
-        experience = (state.detach().clone(), action, reward, next_state.detach().clone(), done)  # .detach().clone()
+        experience = (state, action, reward, next_state, done)
         self.buffer.append(experience)
 
     def sample(self, batch_size):
@@ -68,22 +68,27 @@ class ValueNetwork(nn.Module):
         """Determines network architecture at object initialization"""
         super(ValueNetwork, self).__init__()
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.net = nn.Sequential()
         lin = nn.Linear(state_dim, hidden_dim)
-        lin.weight.data.uniform_(-init_w, init_w)
-        lin.bias.data.uniform_(-init_w, init_w)
+        if init_w:
+            lin.weight.data.uniform_(-init_w, init_w)
+            lin.bias.data.uniform_(-init_w, init_w)
         self.net.append(lin)
         self.net.append(nn.Dropout(dropout))
         for i in range(num_layers):
             lin = nn.Linear(hidden_dim, hidden_dim)
-            lin.weight.data.uniform_(-init_w, init_w)
-            lin.bias.data.uniform_(-init_w, init_w)
+            if init_w:
+                lin.weight.data.uniform_(-init_w, init_w)
+                lin.bias.data.uniform_(-init_w, init_w)
             self.net.append(lin)
             self.net.append(nn.ReLU())
             self.net.append(nn.Dropout(dropout))
         lin = nn.Linear(hidden_dim, 1)
-        lin.weight.data.uniform_(-init_w, init_w)
-        lin.bias.data.uniform_(-init_w, init_w)
+        if init_w:
+            lin.weight.data.uniform_(-init_w, init_w)
+            lin.bias.data.uniform_(-init_w, init_w)
         self.net.append(lin)
 
     def forward(self, state):
@@ -98,22 +103,27 @@ class SoftQNetwork(nn.Module):
         """Determines network architecture at object initialization"""
         super(SoftQNetwork, self).__init__()
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.net = nn.Sequential()
         lin = nn.Linear(num_inputs+num_actions, hidden_dim)
-        lin.weight.data.uniform_(-init_w, init_w)
-        lin.bias.data.uniform_(-init_w, init_w)
+        if init_w:
+            lin.weight.data.uniform_(-init_w, init_w)
+            lin.bias.data.uniform_(-init_w, init_w)
         self.net.append(lin)
         self.net.append(nn.Dropout(dropout))
         for i in range(num_layers):
             lin = nn.Linear(hidden_dim, hidden_dim)
-            lin.weight.data.uniform_(-init_w, init_w)
-            lin.bias.data.uniform_(-init_w, init_w)
+            if init_w:
+                lin.weight.data.uniform_(-init_w, init_w)
+                lin.bias.data.uniform_(-init_w, init_w)
             self.net.append(lin)
             self.net.append(nn.ReLU())
             self.net.append(nn.Dropout(dropout))
         lin = nn.Linear(hidden_dim, 1)
-        lin.weight.data.uniform_(-init_w, init_w)
-        lin.bias.data.uniform_(-init_w, init_w)
+        if init_w:
+            lin.weight.data.uniform_(-init_w, init_w)
+            lin.bias.data.uniform_(-init_w, init_w)
         self.net.append(lin)
 
     def forward(self, state, action):
@@ -131,6 +141,8 @@ class PolicyNetwork(nn.Module):
         """
         super(PolicyNetwork, self).__init__()
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.num_actions = num_actions
 
         self.log_std_min = log_std_min
@@ -138,35 +150,39 @@ class PolicyNetwork(nn.Module):
 
         self.net = nn.Sequential()
         lin = nn.Linear(num_inputs, hidden_dim)
-        lin.weight.data.uniform_(-init_w, init_w)
-        lin.bias.data.uniform_(-init_w, init_w)
+        if init_w:
+            lin.weight.data.uniform_(-init_w, init_w)
+            lin.bias.data.uniform_(-init_w, init_w)
         self.net.append(lin)
         for i in range(num_layers):
             lin = nn.Linear(hidden_dim, hidden_dim)
-            lin.weight.data.uniform_(-init_w, init_w)
-            lin.bias.data.uniform_(-init_w, init_w)
+            if init_w:
+                lin.weight.data.uniform_(-init_w, init_w)
+                lin.bias.data.uniform_(-init_w, init_w)
             self.net.append(lin)
             self.net.append(nn.ReLU())
             self.net.append(nn.Dropout(dropout))
 
         # This layer computes the mean-value
         self.mean_linear = nn.Linear(hidden_dim, num_actions)
-        self.mean_linear.weight.data.uniform_(-init_w, init_w)
-        self.mean_linear.bias.data.uniform_(-init_w, init_w)
+        if init_w:
+            self.mean_linear.weight.data.uniform_(-init_w, init_w)
+            self.mean_linear.bias.data.uniform_(-init_w, init_w)
 
-        # This layer computes the deviation-value
-        self.log_std_linear = nn.Linear(hidden_dim, num_actions)
-        self.log_std_linear.weight.data.uniform_(-init_w, init_w)
-        self.log_std_linear.bias.data.uniform_(-init_w, init_w)
+        # # This layer computes the deviation-value
+        # self.log_std_linear = nn.Linear(hidden_dim, num_actions)
+        # if init_w:
+        #     self.log_std_linear.weight.data.uniform_(-init_w, init_w)
+        #     self.log_std_linear.bias.data.uniform_(-init_w, init_w)
 
     def forward(self, state):
         """Processes the state through the network layers to compute the mean-value and deviation-value"""
         x = self.net(state)
         mean = self.mean_linear(x)
-        log_std = self.log_std_linear(x)
+        # log_std = self.log_std_linear(x)
         # log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
 
-        return mean, log_std
+        return mean#, log_std
 
 
 class extract_lstm_output(nn.Module):
@@ -231,12 +247,12 @@ class PolicyRoboboboNetwork(PolicyNetwork):
 
     def forward(self, state):
         """
-        1. process each corresponding input through the sub networks
-        2. concatenate the remaining state tensors with the outputs of the sub networks
-        3. process the concatenated tensor through the policy network
+        1. process corresponding inputs (multidimensional ones) through the sub networks
+        2. concatenate the remaining states with the outputs of the sub networks (now arrays)
+        3. process the new state with the actual network
 
         :param state: list of tensors, where the last n tensors are the inputs for the n sub networks
-        :return: mean and log_std of the policy network
+        :return: return of actual network
         """
 
         # TODO: Check for correct input
@@ -245,15 +261,62 @@ class PolicyRoboboboNetwork(PolicyNetwork):
 
         state_sub_networks = []
         for i, sub_network in enumerate(self.policy_sub_networks):
-            state_sub_networks.append(sub_network(state[-len(self.policy_sub_networks) + i]))
+            state_sub_networks.append(sub_network(state[-len(self.policy_sub_networks) + i].to(self.device)))
         state = state[:-len(self.policy_sub_networks)]
         state.extend(state_sub_networks)
         for i in range(len(state)):
             if len(state[i].shape) > 2:
                 state[i] = state[i].reshape(state[i].shape[0], -1)
+            state[i] = state[i].to(self.device)
+        state = torch.concat(state, dim=-1).float()
+        return super(PolicyRoboboboNetwork, self).forward(state)
+
+
+class SoftQRoboboboNetwork(SoftQNetwork):
+    def __init__(self, num_inputs, num_actions, hidden_size, num_layers=3, init_w=3e-3, policy_sub_networks: Optional[nn.ModuleList]=nn.ModuleList()):
+        # calculate num_inputs for policy network by subtracting the number of sub network inputs and adding the number of sub network outputs
+        if policy_sub_networks is not None:
+            num_inputs_policy_network = num_inputs - sum([sub_net.input_dim*sub_net.seq_len - sub_net.hidden_dim for sub_net in policy_sub_networks])
+        else:
+            num_inputs_policy_network = num_inputs
+        super().__init__(num_inputs=num_inputs_policy_network, num_actions=num_actions, hidden_dim=hidden_size, num_layers=num_layers, init_w=init_w)
+        self.policy_sub_networks = policy_sub_networks
+
+    def forward(self, state, action):
+        state_sub_networks = []
+        for i, sub_network in enumerate(self.policy_sub_networks):
+            state_sub_networks.append(sub_network(state[-len(self.policy_sub_networks) + i].to(self.device)))
+        state = state[:-len(self.policy_sub_networks)]
+        state.extend(state_sub_networks)
+        for i in range(len(state)):
+            if len(state[i].shape) > 2:
+                state[i] = state[i].reshape(state[i].shape[0], -1).to(self.device)
         state = torch.concat(state, dim=1)
-        mean, log_std = super(PolicyRoboboboNetwork, self).forward(state)
-        return mean, log_std
+        return super(SoftQRoboboboNetwork, self).forward(state, action)
+
+
+class ValueRoboboboNetwork(ValueNetwork):
+    def __init__(self, num_inputs, hidden_size, num_layers=3, init_w=3e-3, policy_sub_networks: Optional[nn.ModuleList] = nn.ModuleList()):
+        # calculate num_inputs for policy network by subtracting the number of sub network inputs and adding the number of sub network outputs
+        if policy_sub_networks is not None:
+            num_inputs_policy_network = num_inputs - sum(
+                [sub_net.input_dim * sub_net.seq_len - sub_net.hidden_dim for sub_net in policy_sub_networks])
+        else:
+            num_inputs_policy_network = num_inputs
+        super().__init__(state_dim=num_inputs_policy_network, hidden_dim=hidden_size, num_layers=num_layers, init_w=init_w)
+        self.policy_sub_networks = policy_sub_networks
+
+    def forward(self, state):
+        state_sub_networks = []
+        for i, sub_network in enumerate(self.policy_sub_networks):
+            state_sub_networks.append(sub_network(state[-len(self.policy_sub_networks) + i].to(self.device)))
+        state = state[:-len(self.policy_sub_networks)]
+        state.extend(state_sub_networks)
+        for i in range(len(state)):
+            if len(state[i].shape) > 2:
+                state[i] = state[i].reshape(state[i].shape[0], -1).to(self.device)
+        state = torch.concat(state, dim=1)
+        return super(ValueRoboboboNetwork, self).forward(state)
 
 
 class SACAgent:
@@ -265,7 +328,7 @@ class SACAgent:
     policy_state = torch.Tensor
 
     def __init__(self, env: Environment, temperature=1., state_dim=None, action_dim=None, hidden_dim=256, num_layers=3,
-                 hold_threshold=1e-2, replay_buffer_size=1000000):
+                 learning_rate=1e-4, init_w=3e-3, hold_threshold=1e-2, replay_buffer_size=1000000):
         """Initializes the networks, determines the availability of cuda
         and initializes the replay buffer and the optimizer.
         """
@@ -281,16 +344,20 @@ class SACAgent:
         self.hidden_dim = hidden_dim
 
         # initialize SAC networks
-        self.value_net = ValueNetwork(self.state_dim, self.hidden_dim, num_layers=num_layers).to(self.device)
-        self.target_value_net = ValueNetwork(self.state_dim, self.hidden_dim, num_layers=num_layers).to(self.device)
+        self.value_net = ValueNetwork(self.state_dim, self.hidden_dim,
+                                      num_layers=num_layers, init_w=init_w).to(self.device)
+        self.target_value_net = ValueNetwork(self.state_dim, self.hidden_dim,
+                                             num_layers=num_layers, init_w=init_w).to(self.device)
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(param.data)
 
-        self.soft_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers).to(self.device)
-        self.soft_q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers).to(self.device)
+        self.soft_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                        num_layers=num_layers, init_w=init_w).to(self.device)
+        self.soft_q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                        num_layers=num_layers, init_w=init_w).to(self.device)
 
         self.policy_net = PolicyNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers,
-                                        init_w=3e-6, log_std_min=-20, log_std_max=2).to(self.device)
+                                        init_w=3e-3, log_std_min=-20, log_std_max=2).to(self.device)
 
         # Initializes the networks' cost-function, optimizer and learning rates
         self.value_criterion = nn.MSELoss()
@@ -298,9 +365,9 @@ class SACAgent:
         self.soft_q_criterion2 = nn.MSELoss()
         self.policy_criterion = nn.L1Loss()
 
-        self.value_lr = 1e-4
-        self.soft_q_lr = 1e-4
-        self.policy_lr = 1e-4
+        self.value_lr = learning_rate
+        self.soft_q_lr = learning_rate
+        self.policy_lr = learning_rate
 
         self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=self.value_lr)
         self.soft_q_optimizer1 = optim.Adam(self.soft_q_net1.parameters(), lr=self.soft_q_lr)
@@ -317,57 +384,41 @@ class SACAgent:
         self.num_actions = 0
         self.obs_dims = []  # for self.state_tensor_to_list; will be written at first use of self.state_list_to_tensor
 
-    def evaluate(self, state, epsilon=1e-6):
-        """Is used during training to determine the entropy H(X)"""
-        if self.policy_state.__name__ == list.__name__:
-            state = self.state_tensor_to_list(state)
-        mean, log_std = self.policy_net.forward(state)
-        log_std = torch.clamp(log_std, self.policy_net.log_std_min, self.policy_net.log_std_max)
-        std = log_std.exp()
-
-        normal = Normal(0, 1)
-        z = normal.sample(std.shape).to(self.device)
-        action = mean + std * z
-        action = torch.clamp(action, -1., 1.)
-        # softmax over all positive (buy) actions to make sure not to spend more than 100% of the cash
-        if action[action > 0].sum() > 1:
-            action[action > 0] = self.env.action_space.softmax(action[action > 0])
-        log_prob = Normal(mean, std).log_prob(mean + std * z) - torch.log(1 - action.pow(2) + epsilon)
-        return action, log_prob.sum(dim=-1).unsqueeze(-1), z, mean, log_std
-
-    def get_action(self, state, hold=True):
+    def get_action(self, state, hold=False, log_prob=False, epsilon=1e-6):
         """Is used to compute an action during experience gathering and testing"""
-        # state = state.unsqueeze(0).to(self.device)
-        if self.policy_state.__name__ == list.__name__:
+        if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
         mean, log_std = self.policy_net.forward(state)
+
         log_std = torch.clamp(log_std, self.policy_net.log_std_min, self.policy_net.log_std_max)
         if self.training:
-            # deviation-value is only during training > 0 to encourage exploration
-            # During testing std = 0 since exploration is not needed anymore
+            # During training: std != 0 to encourage exploration
+            # During testing: std = 0 since exploration is not necessary
             std = log_std.exp()
         else:
             std = torch.zeros_like(log_std)
 
         # Generate random value for randomized action-selection
         normal = Normal(0, 1)
-        z = normal.sample().to(self.device)
+        z = normal.sample(std.shape).to(self.device)
 
         # Draw action by applying scaled tanh-function
         action = mean + std * z
         action = torch.clamp(action, -1., 1.)
-
-        action = action.detach().cpu()
 
         if hold:
             # if one action is smaller than the hold threshold, this action is set to 0
             action[torch.abs(action) < self.hold_threshold] = 0
 
         # softmax over all positive (buy) actions to make sure not to spend more than 100% of the cash
-        if action[action > 0].sum() > 1:
-            action[action > 0] = self.env.action_space.softmax(action[action > 0])
+        # if action[action > 0].sum() > 1:
+        #     action[action > 0] = self.env.action_space.softmax(action[action > 0])
 
-        return action.reshape(max(action.shape),)
+        if not log_prob:
+            return mean
+        else:
+            # log_prob = Normal(mean, std).log_prob(mean + std * z) - torch.log(1 - action.pow(2) + epsilon)
+            return mean, log_prob.mean(dim=-1).unsqueeze(dim=-1)  # TODO: check if mean is correct
 
     def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
         """Update-paradigm"""
@@ -375,33 +426,38 @@ class SACAgent:
         # Draw experience from replay buffer
         state, action, reward, next_state, done = self.replay_buffer.sample(batch_size)
 
-        state = state.to(self.device)
+        if isinstance(state, torch.Tensor):
+            state = state.to(self.device)
+            next_state = next_state.to(self.device)
+            if self.policy_state.__name__ == list.__name__:
+                state = self.state_tensor_to_list(state)
+                next_state = self.state_tensor_to_list(next_state)
         action = action.to(self.device)
         reward = reward.to(self.device)
-        next_state = next_state.to(self.device)
         done = done.to(self.device)
 
         # Get all values, which are necessary for the network updates
-        # (policy iteration algorithm --> policy evaluation and improvement)
-        new_action, log_prob, epsilon, mean, log_std = self.evaluate(state)
+        new_action, log_prob = self.get_action(state, hold=False, log_prob=True)
         predicted_q_value1 = self.soft_q_net1(state, action)
         predicted_q_value2 = self.soft_q_net2(state, action)
         predicted_value = self.value_net(state)
 
         # Training Q Function
-        # Compute target state value from target value network
-        target_value = self.target_value_net(next_state)
         # Compute target Q-value by taking action-dependent reward into account
+        target_value = self.target_value_net(next_state)
         target_q_value = reward + (1 - done) * gamma * target_value
+
         # Compute loss
-        q_value_loss1 = self.soft_q_criterion1(predicted_q_value1, target_q_value.detach())
-        q_value_loss2 = self.soft_q_criterion2(predicted_q_value2, target_q_value.detach())
+        q_value_loss1 = self.soft_q_criterion1(predicted_q_value1, target_q_value.detach().clone())
         self.soft_q_optimizer1.zero_grad()
         q_value_loss1.backward()
         self.soft_q_optimizer1.step()
+
+        q_value_loss2 = self.soft_q_criterion2(predicted_q_value2, target_q_value.detach().clone())
         self.soft_q_optimizer2.zero_grad()
         q_value_loss2.backward()
         self.soft_q_optimizer2.step()
+
         # Get new predicted q value from updated q networks for coming updates
         predicted_new_q_value = torch.min(self.soft_q_net1(state, new_action), self.soft_q_net2(state, new_action))
 
@@ -481,7 +537,7 @@ class SACAgent:
             self.obs_dims = tuple([tuple(x.shape) for x in state])
         for i, e in enumerate(state):
             # flatten state element
-            state[i] = e.flatten().reshape(1, -1)
+            state[i] = torch.tensor(e.flatten().reshape(1, -1))
         # concatenate state elements
         state = torch.cat(state, dim=1)
         return state
@@ -491,27 +547,32 @@ class SACAgent:
         # where each entry has shape (batch_size, self.obs_dims[entry, 0], self.obs_dim[entry, 1])
         state_list = []
         for i, shape in enumerate(self.obs_dims):
-            state_list.append(state[:, :np.product(shape)].reshape([state.shape[0]] + list(shape)))
+            state_list.append(state[:, :np.product(shape)].reshape([state.shape[0]] + list(shape)).float())
             state = state[:, np.product(shape):]
         return state_list
 
 
-class RoboBobo(SACAgent):
+class RoboBoboSAC(SACAgent):
     def __init__(self, env: Environment,
                  temperature=1.,
                  state_dim=None,
                  action_dim=None,
                  hidden_dim=256,
                  num_layers=3,
+                 learning_rate=1e-4,
+                 init_w=3e-3,
                  hold_threshold=1e-3,
                  replay_buffer_size=1e6):
-        super(RoboBobo, self).__init__(env, temperature=temperature,
-                                       state_dim=state_dim, action_dim=action_dim, hidden_dim=hidden_dim, num_layers=3,
-                                       hold_threshold=hold_threshold, replay_buffer_size=replay_buffer_size)
+        super(RoboBoboSAC, self).__init__(env, temperature=temperature,
+                                          state_dim=state_dim, action_dim=action_dim, hidden_dim=hidden_dim, num_layers=3,
+                                          learning_rate=learning_rate, hold_threshold=hold_threshold, init_w=init_w,
+                                          replay_buffer_size=replay_buffer_size)
 
         self.policy_state = list
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
+        self.learning_rate = learning_rate
+        self.init_w = init_w
 
         # self.state_dim = 1 + env.observation_space.num_stocks
 
@@ -522,50 +583,23 @@ class RoboBobo(SACAgent):
         #  +    historic, current and predicted ENCODED stock prices (matrix: (observation_length + seq_len) x encoder.output_dim)
         #  +    validation of prediction (scalar) TODO: turn scalar into vector of validation score for each feature
 
-    def process_stock_prices(self, stock_prices):
-        """process stock prices
-        :param stock_prices: (tensor) stock prices with shape (observation_length, features)"""
-        # differentiate stock prices
-        stock_prices = torch.diff(stock_prices, dim=0)
-        stock_prices = torch.cat((stock_prices[0, :].reshape(1, -1), stock_prices), dim=0)
-        # standardize stock prices
-        if self.scaler:
-            stock_prices = self.scaler.transform(stock_prices)
-        stock_prices = torch.FloatTensor(stock_prices).unsqueeze(0).to(self.device)
-        # encode state
-        if self.autoencoder:
-            stock_prices = self.encode(stock_prices)
-
-        # reshape stock prices
-        stock_prices = stock_prices.reshape(-1, stock_prices.shape[1] * stock_prices.shape[2])
-
-        # predict follow-up stock prices
-        predicted = self.predict(stock_prices).squeeze(2).transpose(2, 1)
-        stock_prices = torch.cat((stock_prices, predicted), dim=1)
-        # validate prediction
-        # validation = self.validate(self.decode(stock_prices).unsqueeze(2).transpose(3, 1))
-        # stock_prices = torch.cat((stock_prices, validation), dim=0)
-
-        return stock_prices.squeeze(0)
-
-    def get_action(self, state, hold=True):
-        action = super().get_action(state)
-
-        return action
-
     def adjust_nets(self, policy_sub_networks: Optional[nn.ModuleList]=None):
         # initialize SAC networks
-        self.value_net = ValueNetwork(self.state_dim, self.hidden_dim, num_layers=self.num_layers).to(self.device)
-        self.target_value_net = ValueNetwork(self.state_dim, self.hidden_dim, num_layers=self.num_layers).to(self.device)
+        self.value_net = ValueRoboboboNetwork(self.state_dim, self.hidden_dim, num_layers=self.num_layers, init_w=self.init_w,
+                                              policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
+        self.target_value_net = ValueRoboboboNetwork(self.state_dim, self.hidden_dim, num_layers=self.num_layers, init_w=self.init_w,
+                                                     policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(param.data)
 
-        self.soft_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers).to(self.device)
-        self.soft_q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers).to(self.device)
+        self.soft_q_net1 = SoftQRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers, init_w=self.init_w,
+                                                policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
+        self.soft_q_net2 = SoftQRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers, init_w=self.init_w,
+                                                policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
 
         self.policy_net = PolicyRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers,
                                                 init_w=3e-3, log_std_min=-20, log_std_max=2,
-                                                policy_sub_networks=policy_sub_networks).to(self.device)
+                                                policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
 
         # Initializes the networks' cost-function, optimizer and learning rates
         self.value_criterion = nn.MSELoss()
@@ -573,14 +607,283 @@ class RoboBobo(SACAgent):
         self.soft_q_criterion2 = nn.MSELoss()
         self.policy_criterion = nn.L1Loss()
 
-        self.value_lr = 1e-4
-        self.soft_q_lr = 1e-4
-        self.policy_lr = 1e-4
+        self.value_lr = self.learning_rate
+        self.soft_q_lr = self.learning_rate
+        self.policy_lr = self.learning_rate
 
         self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=self.value_lr)
         self.soft_q_optimizer1 = optim.Adam(self.soft_q_net1.parameters(), lr=self.soft_q_lr)
         self.soft_q_optimizer2 = optim.Adam(self.soft_q_net2.parameters(), lr=self.soft_q_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=self.policy_lr)
+
+    def set_state_dim(self, num_states: int):
+        """sets the dimension of the state"""
+        self.state_dim = num_states
+
+    def set_action_dim(self, num_actions: int):
+        """sets the dimension of the action space"""
+        self.action_dim = num_actions
+
+    def create_policy_sub_network(self, input_dim, hidden_dim, seq_len=1, lstm=False, num_layers=2, dropout=.1):
+        return PolicySubNetwork(input_dim, hidden_dim, seq_len=seq_len, lstm=lstm, num_layers=num_layers,
+                                dropout=dropout).to(self.device)
+
+
+class OrnsteinUhlenbeckActionNoise:
+    def __init__(self, action_dim, mu=0, theta=0.15, sigma=0.2):
+        self.action_dim = action_dim
+        self.mu = mu
+        self.theta = theta
+        self.sigma = sigma
+        self.X = np.ones(self.action_dim) * self.mu
+
+    def reset(self):
+        self.X = np.ones(self.action_dim) * self.mu
+
+    def sample(self):
+        dx = self.theta * (self.mu - self.X)
+        dx = dx + self.sigma * np.random.randn(len(self.X))
+        self.X = self.X + dx
+        return self.X
+
+
+class DDPGAgent:
+
+    num_steps = 0
+    state_values = []
+    training = False
+    policy_state = torch.Tensor
+
+    def __init__(self, env: Environment, state_dim=None, action_dim=None, hidden_dim=256, num_layers=3,
+                 learning_rate=1e-4, init_w=3e-3, hold_threshold=1e-2, replay_buffer_size=1000000):
+        """Initializes the networks, determines the availability of cuda
+        and initializes the replay buffer and the optimizer.
+        """
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # self.env = NormalizedActions(env)
+        self.env = env
+        self.action_dim = action_dim if action_dim else self.env.action_space.shape[0]
+        self.state_dim = state_dim if state_dim else self.env.observation_space.dim
+        self.hidden_dim = hidden_dim
+        self.noise = OrnsteinUhlenbeckActionNoise(self.action_dim)
+
+        # initialize AC network
+        self.critic = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                   num_layers=num_layers, init_w=init_w).to(self.device)
+        self.target_critic = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                          num_layers=num_layers, init_w=init_w).to(self.device)
+
+        self.actor = PolicyNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers,
+                                   init_w=3e-3, log_std_min=-20, log_std_max=2).to(self.device)
+        self.target_actor = PolicyNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers,
+                                          init_w=3e-3, log_std_min=-20, log_std_max=2).to(self.device)
+
+        # Initializes the networks' cost-function, optimizer and learning rates
+        self.critic_loss = nn.MSELoss()
+        self.actor_loss = nn.L1Loss()
+
+        self.critic_lr = learning_rate
+        self.actor_lr = learning_rate
+
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
+
+        # Initializes the replay buffer within the agent
+        self.replay_buffer_size = replay_buffer_size
+        self.replay_buffer = ReplayBuffer(self.replay_buffer_size)
+
+        # threshold to enable hold action i.e., all absolute actions smaller than this value are considered as hold
+        self.hold_threshold = hold_threshold
+
+        self.num_actions = 0
+        self.obs_dims = []  # for self.state_tensor_to_list; will be written at first use of self.state_list_to_tensor
+
+    def get_action_exploitation(self, state):
+        """Is used to compute an action during experience gathering and testing"""
+        if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
+            state = self.state_tensor_to_list(state)
+        action = self.target_actor.forward(state)
+        return action
+
+    def get_action_exploration(self, state, noise=False):
+        """Is used to compute an action during experience gathering and testing"""
+        if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
+            state = self.state_tensor_to_list(state)
+        action = self.actor.forward(state)#.detach().cpu().numpy()
+        if noise:
+            action += torch.from_numpy(self.noise.sample()).to(self.device)
+        return action
+
+    def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
+        # Draw experience from replay buffer
+        s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
+
+        if isinstance(s1, torch.Tensor):
+            state = s1.to(self.device)
+            s2 = s2.to(self.device)
+            if self.policy_state.__name__ == list.__name__:
+                s1 = self.state_tensor_to_list(s1)
+                s2 = self.state_tensor_to_list(s2)
+        a1 = a1.to(self.device)
+        r1 = r1.to(self.device)
+        done = done.to(self.device)
+
+        # Get all values, which are necessary for the network updates
+        # new_action = self.get_action_(state, hold=False, log_prob=True)
+        # predicted_q_value1 = self.soft_q_net1(state, action)
+        # predicted_q_value2 = self.soft_q_net2(state, action)
+        # predicted_value = self.value_net(state)
+
+        # ---------------------- optimize critic ----------------------
+        #
+        a2 = self.get_action_exploitation(s1).detach()
+        next_val = torch.squeeze(self.target_critic.forward(s2, a2).detach())
+        y_expected = r1 + gamma * next_val * (1 - done)
+        y_predicted = torch.squeeze(self.critic.forward(s1, a1))
+        # compute critic loss
+        critic_loss = self.critic_loss(y_predicted, y_expected)
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        # ---------------------- optimize actor ----------------------
+        #
+        pred_a1 = self.get_action_exploration(s1)
+        actor_loss = -self.target_critic.forward(s1, pred_a1).sum()  # TODO: target_critic or critic?? try also mean()
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        self.actor_optimizer.step()
+
+        # ---------------------- update target networks ----------------------
+        #
+        for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+
+        for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+
+    def train(self):
+        self.training = True
+        self.actor.train()
+        self.target_actor.train()
+        self.critic.train()
+        self.target_critic.train()
+
+    def eval(self):
+        self.training = False
+        self.actor.eval()
+        self.target_actor.eval()
+        self.critic.eval()
+        self.target_critic.eval()
+
+    def save_checkpoint(self, path):
+        sac_dict = {
+            'critic': self.critic.state_dict(),
+            'target_critic': self.target_critic.state_dict(),
+            'actor': self.actor.state_dict(),
+            'target_actor': self.target_actor.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_optimizer': self.critic_optimizer.state_dict(),
+            'action_dim': self.action_dim,
+            'state_dim': self.state_dim,
+            'hidden_dim': self.hidden_dim,
+            'num_actions': self.num_actions,
+        }
+
+        torch.save(sac_dict, path)
+
+    def load_checkpoint(self, path):
+        sac_dict = torch.load(path, map_location=self.device)
+        self.critic.load_state_dict(sac_dict['critic'])
+        self.target_critic.load_state_dict(sac_dict['target_critic'])
+        self.actor.load_state_dict(sac_dict['actor'])
+        self.target_actor.load_state_dict(sac_dict['target_actor'])
+        self.actor_optimizer.load_state_dict(sac_dict['actor_optimizer'])
+        self.critic_optimizer.load_state_dict(sac_dict['critic_optimizer'])
+        self.num_actions = sac_dict['num_actions']
+        print("Loaded checkpoint from path: {}".format(path))
+
+    def state_list_to_tensor(self, state):
+        state = list(state)
+        if len(self.obs_dims) == 0:
+            # each entry will be the sequence length of each entry
+            self.obs_dims = tuple([tuple(x.shape) for x in state])
+        for i, e in enumerate(state):
+            # flatten state element
+            state[i] = torch.tensor(e.flatten().reshape(1, -1))
+        # concatenate state elements
+        state = torch.cat(state, dim=1)
+        return state
+
+    def state_tensor_to_list(self, state):
+        # transform tensor from shape (batch_size, obs_dim) to list of size (obs)
+        # where each entry has shape (batch_size, self.obs_dims[entry, 0], self.obs_dim[entry, 1])
+        state_list = []
+        for i, shape in enumerate(self.obs_dims):
+            state_list.append(state[:, :np.product(shape)].reshape([state.shape[0]] + list(shape)).float())
+            state = state[:, np.product(shape):]
+        return state_list
+
+
+class RoboBoboDDPG(DDPGAgent):
+    def __init__(self, env: Environment,
+                 state_dim=None,
+                 action_dim=None,
+                 hidden_dim=256,
+                 num_layers=3,
+                 learning_rate=1e-4,
+                 init_w=3e-3,
+                 hold_threshold=1e-3,
+                 replay_buffer_size=1e6):
+        super(RoboBoboDDPG, self).__init__(env, state_dim=state_dim, action_dim=action_dim, hidden_dim=hidden_dim,
+                                           num_layers=3, learning_rate=learning_rate, hold_threshold=hold_threshold,
+                                           init_w=init_w, replay_buffer_size=replay_buffer_size)
+
+        self.policy_state = list
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
+        self.learning_rate = learning_rate
+        self.init_w = init_w
+
+        # self.state_dim = 1 + env.observation_space.num_stocks
+
+        # modify state dim according to autoencoder:
+        #  state_dim =
+        #       current cash (float scalar)
+        #  +    historic and current REAL portofolio value (matrix: (observation_length x num_stocks))
+        #  +    historic, current and predicted ENCODED stock prices (matrix: (observation_length + seq_len) x encoder.output_dim)
+        #  +    validation of prediction (scalar) TODO: turn scalar into vector of validation score for each feature
+
+    def adjust_nets(self, policy_sub_networks: Optional[nn.ModuleList] = None):
+        # initialize SAC networks
+        self.critic = SoftQRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                           num_layers=self.num_layers, init_w=self.init_w,
+                                           policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
+        self.target_critic = SoftQRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                           num_layers=self.num_layers, init_w=self.init_w,
+                                           policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
+        for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
+            target_param.data.copy_(param.data)
+
+        self.actor = PolicyRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers,
+                                           init_w=3e-3, log_std_min=-20, log_std_max=2,
+                                           policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
+
+        self.target_actor = PolicyRoboboboNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=self.num_layers,
+                                                  init_w=3e-3, log_std_min=-20, log_std_max=2,
+                                                  policy_sub_networks=copy.deepcopy(policy_sub_networks)).to(self.device)
+
+        # Initializes the networks' cost-function, optimizer and learning rates
+        self.critic_loss = nn.MSELoss()
+        self.actor_loss = nn.L1Loss()
+
+        self.critic_lr = self.learning_rate
+        self.actor_lr = self.learning_rate
+
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
 
     def set_state_dim(self, num_states: int):
         """sets the dimension of the state"""
@@ -698,6 +1001,8 @@ class DataProcessor:
             stock_prices = self._predict(stock_prices, ptype)
             # decoded = self.processor[ptype]["autoencoder"].decode(stock_prices)
         # check if necessary to decode stock prices
+        else:
+            stock_prices = torch.tensor(stock_prices, dtype=torch.float32)
 
         # reshape stock prices
         if flatten:
@@ -771,6 +1076,7 @@ def train_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor,
 
     episode = 0
     total_equity_final = []
+    episode_log_prob = []
     agent.train()
     cpu_device = torch.device('cpu')
 
@@ -779,16 +1085,15 @@ def train_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor,
 
     try:
         while episode < max_episodes:
-            env.hard_reset(random_split=True, split_length=int(365*2))
+            env.hard_reset(random_split=True, split_length=50)
             env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
 
             done = False
             while not done:
                 # if agent is RoboBobo, filter, downsample, scale, encode and predict follow-up stock prices before passing to agent
-                if isinstance(agent, RoboBobo):
+                if isinstance(agent, RoboBoboSAC):
                     state = list(env.observation_space(normalized=True))
-                    # delete last element of state (last stock prices) as it is not used by RoboBobo
-                    # del state[-1]
+                    # state = [torch.tensor(state[i], dtype=torch.float32) for i in range(len(state))]
                     for key in data_processor.processor.keys():
                         # get downsampling rate if available
                         if data_processor.processor[key]["downsampling_rate"]:
@@ -796,7 +1101,7 @@ def train_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor,
                         else:
                             downsampling_rate = 1
                         # get start index of observed stock prices by taking maximum of 0 and current time step minus observation length
-                        start_idx = max(0, env.t - 1 - env.observation_length * downsampling_rate)
+                        start_idx = np.max((0, env.t - 1 - env.observation_length * downsampling_rate))
                         obs_stock_data = np.zeros((env.observation_length * downsampling_rate, env.stock_data.shape[1]))
                         obs_stock_data[-env.t + 1:, :] = env.stock_data[start_idx:env.t - 1, :]
                         state.append(data_processor.process(obs_stock_data, ptype=key, flatten=False, mask=0).to(cpu_device))
@@ -807,16 +1112,21 @@ def train_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor,
                 # Decide whether to draw random action or to use agent
                 if len(agent.replay_buffer) < num_random_actions:
                     # Draw random action
-                    action = env.action_space.sample(hold_threshold=agent.hold_threshold)
+                    action = env.action_space.sample(hold_threshold=agent.hold_threshold, tensor=True)
+                    log_prob = torch.tensor(-20).float().reshape(1, 1)
                 else:
                     # Draw greedy action
-                    action = agent.get_action(state.to(agent.device)).to(cpu_device)
+                    action, log_prob = agent.get_action(state, hold=False, log_prob=True)
+                    action = action.to(cpu_device)
+                    log_prob = log_prob.to(cpu_device)
+                episode_log_prob.append(log_prob)
 
                 # Give chosen action to environment to adjust internal parameters and to compute new state
-                next_state, reward, done, _ = env.step(action)
+                next_state, reward, done, _ = env.step(action.detach().cpu().numpy().reshape(-1, ))
 
-                if isinstance(agent, RoboBobo):
+                if isinstance(agent, RoboBoboSAC):
                     next_state = list(next_state)
+                    # next_state = [torch.tensor(state[i], dtype=torch.float32) for i in range(len(next_state))]
                     # del next_state[-1]
                     for key in data_processor.processor.keys():
                         # get downsampling rate if available
@@ -825,18 +1135,18 @@ def train_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor,
                         else:
                             downsampling_rate = 1
                         # get start index of observed stock prices by taking maximum of 0 and current time step minus observation length
-                        start_idx = max(0, env.t-1-env.observation_length * downsampling_rate)
+                        start_idx = np.max([0, env.t-1-env.observation_length * downsampling_rate])
                         obs_stock_data = np.zeros((env.observation_length * downsampling_rate, env.stock_data.shape[1]))
                         obs_stock_data[-env.t+1:, :] = env.stock_data[start_idx:env.t-1, :]
                         next_state.append(data_processor.process(obs_stock_data, ptype=key, flatten=False, mask=0).to(cpu_device))
                     next_state = agent.state_list_to_tensor(next_state)
 
                 # Append experience to replay buffer
-                agent.replay_buffer.push(state,
-                                         action.reshape(1, -1),
-                                         reward.reshape(1, 1),
-                                         next_state,
-                                         torch.FloatTensor([done]).reshape(1, 1))
+                agent.replay_buffer.push(state.detach().clone(),
+                                         action.detach().clone(),
+                                         torch.FloatTensor(reward.reshape(1, 1)).detach().clone(),
+                                         next_state.detach().clone(),
+                                         torch.FloatTensor([done]).reshape(1, 1).detach().clone())
 
                 # Update parameters each n steps
                 if agent.num_actions % parameter_update_interval == 0 \
@@ -847,7 +1157,7 @@ def train_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor,
                 agent.num_actions += 1
 
             # Collect total equity of current episode
-            print("Episode: {} -- time steps: {} -- total equity: {} -- total equity per time: {}".format(episode + 1, env.t, np.round(env.total_equity().item(), 2), np.round(env.total_equity().item()/len(env.stock_data), 2)))
+            print("Episode: {} -- time steps: {} -- total equity: {} -- avg log prob: {}".format(episode + 1, env.t + 1, np.round(env.total_equity(), 2), np.round(torch.concat(episode_log_prob).mean().item(), 2)))
             total_equity_final.append(env.total_equity().item())
             episode += 1
 
@@ -881,6 +1191,7 @@ def test_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor, t
     total_equity = []
     actions = []
     portfolio = []
+    cash = []
     if test:
         agent.eval()
     else:
@@ -889,7 +1200,7 @@ def test_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor, t
     env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
 
     while not done:
-        if isinstance(agent, RoboBobo):
+        if isinstance(agent, RoboBoboSAC):
             state = list(env.observation_space(normalized=True))
             # delete last element of state (last stock prices) as it is not used by RoboBobo
             # del state[-1]
@@ -908,30 +1219,240 @@ def test_sac(env: Environment, agent: SACAgent, data_processor: DataProcessor, t
         else:
             state = env.observation_space(dtype=torch.Tensor)
 
-        action = agent.get_action(state.float().to(agent.device))
-        state, _, done, _ = env.step(action)
-        total_equity.append(env.total_equity().item())
+        action = agent.get_action(state.float().to(agent.device), hold=False)
+        state, _, done, _ = env.step(action.detach().cpu().numpy().reshape(-1,))
 
-        actions.append(action.detach().cpu().numpy())
-        portfolio.append(env.portfolio.detach().cpu().squeeze(0).numpy())
+        total_equity.append(copy.deepcopy(env.total_equity()))
+        actions.append(action.detach().clone().cpu().numpy().reshape(-1,))
+        portfolio.append(copy.deepcopy(env.portfolio.reshape(-1,)))
+        cash.append(copy.deepcopy(env.cash))
 
     print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
 
     if plot:
-        plt.plot(total_equity)
-        plt.plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
-        plt.ylabel('Total equity [$]')
-        plt.xlabel('Time step')
-        plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
-        plt.legend(['Total equity [$]', 'Avg. total final equity [$]'])
+        fig, axs = plt.subplots(4, 1, sharex=True)
+
+        axs[0].plot(total_equity)
+        axs[0].set_ylabel('Total equity [$]')
+        # axs[0].plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
+        # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
+        # plt.legend(['Total equity [$]', 'Avg. total final equity [$]'])
+
+        axs[1].plot(env.stock_data)
+        axs[1].set_ylabel('Stock prices [$]')
+
+        axs[2].plot(portfolio)
+        axs[2].set_ylabel('Portfolio')
+
+        axs[3].plot(actions)
+        axs[3].set_ylabel('Actions')
+        axs[3].set_xlabel('Time steps')
+
         plt.show()
 
-        visualize_actions(np.array(actions), min=-1, max=1, title='actions over time')
-        visualize_actions(np.array(portfolio), cmap='sequential', title='portfolio over time')
+        # visualize_actions(np.array(actions), cmap=None, min=-1, max=1, title='actions over time')
+        # visualize_actions(np.array(portfolio), cmap=None, title='portfolio over time')
 
     if plot_reference:
         # plot the average of all stock prices
-        avg = torch.mean(env.stock_data, dim=1)
+        avg = np.mean(env.stock_data, axis=1)
+        plt.plot(avg)
+        plt.ylabel('Average stock price [$]')
+        plt.xlabel('Time step')
+        plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
+        plt.show()
+
+
+def train_ddpg(env: Environment, agent: DDPGAgent, data_processor: DataProcessor,
+               max_episodes: int, batch_size: int, parameter_update_interval: int,
+               num_random_actions=None, path_checkpoint=None, checkpoint_interval=100):
+    """Batch training method
+    This method interacts with the environment and trains the agent in batches.
+
+    The environment must be of the following structure:
+    - env.reset() --> returns initial state
+    - env.step(action) --> returns next state, reward, done, info
+    - env.hard_reset() --> resets all environment parameters to initial state
+    - env.soft_reset() --> resets only certain environment parameters to initial state
+    - env.action_space.sample() --> returns random action from the environment action space
+
+    The agent is provided as a class within this file.
+    """
+
+    episode = 0
+    total_equity_final = []
+    agent.train()
+    cpu_device = torch.device('cpu')
+
+    if not num_random_actions:
+        num_random_actions = agent.replay_buffer_size/4
+
+    try:
+        while episode < max_episodes:
+            env.hard_reset(random_split=True, split_length=50)
+            env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
+
+            done = False
+            while not done:
+                # if agent is RoboBobo, filter, downsample, scale, encode and predict follow-up stock prices before passing to agent
+                if isinstance(agent, RoboBoboDDPG):
+                    state = list(env.observation_space(normalized=True))
+                    # state = [torch.tensor(state[i], dtype=torch.float32) for i in range(len(state))]
+                    for key in data_processor.processor.keys():
+                        # get downsampling rate if available
+                        if data_processor.processor[key]["downsampling_rate"]:
+                            downsampling_rate = data_processor.processor[key]["downsampling_rate"]
+                        else:
+                            downsampling_rate = 1
+                        # get start index of observed stock prices by taking maximum of 0 and current time step minus observation length
+                        start_idx = np.max((0, env.t - 1 - env.observation_length * downsampling_rate))
+                        obs_stock_data = np.zeros((env.observation_length * downsampling_rate, env.stock_data.shape[1]))
+                        obs_stock_data[-env.t + 1:, :] = env.stock_data[start_idx:env.t - 1, :]
+                        state.append(data_processor.process(obs_stock_data, ptype=key, flatten=False, mask=0).to(cpu_device))
+                    state = agent.state_list_to_tensor(state)
+                else:
+                    state = env.observation_space(dtype=torch.Tensor)
+
+                # Decide whether to draw random action or to use agent
+                if len(agent.replay_buffer) < num_random_actions:
+                    # Draw random action
+                    action = env.action_space.sample(hold_threshold=agent.hold_threshold, tensor=True)
+                else:
+                    # Draw greedy action
+                    action = agent.get_action_exploration(state, noise=True).to(cpu_device)
+
+                # Give chosen action to environment to adjust internal parameters and to compute new state
+                next_state, reward, done, _ = env.step(action.detach().cpu().numpy().reshape(-1, ))
+
+                if isinstance(agent, RoboBoboDDPG):
+                    next_state = list(next_state)
+                    # next_state = [torch.tensor(state[i], dtype=torch.float32) for i in range(len(next_state))]
+                    # del next_state[-1]
+                    for key in data_processor.processor.keys():
+                        # get downsampling rate if available
+                        if data_processor.processor[key]["downsampling_rate"]:
+                            downsampling_rate = data_processor.processor[key]["downsampling_rate"]
+                        else:
+                            downsampling_rate = 1
+                        # get start index of observed stock prices by taking maximum of 0 and current time step minus observation length
+                        start_idx = np.max([0, env.t-1-env.observation_length * downsampling_rate])
+                        obs_stock_data = np.zeros((env.observation_length * downsampling_rate, env.stock_data.shape[1]))
+                        obs_stock_data[-env.t+1:, :] = env.stock_data[start_idx:env.t-1, :]
+                        next_state.append(data_processor.process(obs_stock_data, ptype=key, flatten=False, mask=0).to(cpu_device))
+                    next_state = agent.state_list_to_tensor(next_state)
+
+                # Append experience to replay buffer
+                agent.replay_buffer.push(state.detach().clone(),
+                                         action.detach().clone(),
+                                         torch.FloatTensor(reward.reshape(1, 1)).detach().clone(),
+                                         next_state.detach().clone(),
+                                         torch.FloatTensor([done]).reshape(1, 1).detach().clone())
+
+                # Update parameters each n steps
+                if agent.num_actions % parameter_update_interval == 0 and len(agent.replay_buffer) > batch_size:
+                        # and len(agent.replay_buffer) > num_random_actions \
+                    agent.update(batch_size)
+
+                agent.num_actions += 1
+
+            # Collect total equity of current episode
+            print(f"Episode: {episode + 1} -- time steps: {env.t + 1} -- total equity: {np.round(env.total_equity(), 2)}")
+            total_equity_final.append(env.total_equity().item())
+            episode += 1
+
+            # Save model for later use
+            if path_checkpoint and episode % checkpoint_interval == 0:
+                agent.save_checkpoint(path_checkpoint)
+
+        return total_equity_final, agent
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt detected.")
+        print("Results:")
+
+        # plot_results(episode_rewards, all_rewards, all_actions)
+        avg_reward = np.mean(total_equity_final)
+        median_reward = np.median(total_equity_final)
+        print("Average episodic reward:\t" + str(avg_reward) + "\nMedian episodic reward:\t" + str(median_reward))
+
+        plt.plot(total_equity_final)
+        plt.plot(np.convolve(total_equity_final, np.ones(10) / 10, mode='valid'))
+        plt.ylabel('Total final equity [$]')
+        plt.xlabel('Episode')
+        plt.title('Total final equity after each episode in [$]')
+        plt.legend(['Total final equity [$]', 'Avg. total final equity [$]'])
+        plt.show()
+
+
+def test_ddpg(env: Environment, agent: DDPGAgent, data_processor: DataProcessor, test=True, plot=True, plot_reference=False):
+    """Test trained SAC agent"""
+    cpu_device = torch.device('cpu')
+    done = False
+    total_equity = []
+    actions = []
+    portfolio = []
+    cash = []
+    if test:
+        agent.eval()
+    else:
+        agent.train()
+    env.hard_reset()
+    env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
+
+    while not done:
+        if isinstance(agent, RoboBoboDDPG):
+            state = list(env.observation_space(normalized=True))
+            for key in data_processor.processor.keys():
+                # get downsampling rate if available
+                if data_processor.processor[key]["downsampling_rate"]:
+                    downsampling_rate = data_processor.processor[key]["downsampling_rate"]
+                else:
+                    downsampling_rate = 1
+                # get start index of observed stock prices by taking maximum of 0 and current time step minus observation length
+                start_idx = max(0, env.t-1-env.observation_length * downsampling_rate)
+                obs_stock_data = np.zeros((env.observation_length * downsampling_rate, env.stock_data.shape[1]))
+                obs_stock_data[-env.t+1:, :] = env.stock_data[start_idx:env.t-1, :]
+                state.append(data_processor.process(obs_stock_data, ptype=key, flatten=False, mask=0).to(cpu_device))
+            state = agent.state_list_to_tensor(state)
+        else:
+            state = env.observation_space(dtype=torch.Tensor)
+
+        action = agent.get_action_exploitation(state.float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
+        state, _, done, _ = env.step(action)
+
+        total_equity.append(copy.deepcopy(env.total_equity()))
+        actions.append(copy.deepcopy(action))
+        portfolio.append(copy.deepcopy(env.portfolio.reshape(-1,)))
+        cash.append(copy.deepcopy(env.cash))
+
+    print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
+
+    if plot:
+        fig, axs = plt.subplots(4, 1, sharex=True)
+
+        axs[0].plot(total_equity)
+        axs[0].set_ylabel('Total equity [$]')
+        # axs[0].plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
+        # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
+        # plt.legend(['Total equity [$]', 'Avg. total final equity [$]'])
+
+        axs[1].plot(env.stock_data)
+        axs[1].set_ylabel('Stock prices [$]')
+
+        axs[2].plot(portfolio)
+        axs[2].set_ylabel('Portfolio')
+
+        axs[3].plot(actions)
+        axs[3].set_ylabel('Actions')
+        axs[3].set_xlabel('Time steps')
+
+        plt.show()
+
+        # visualize_actions(np.array(actions), cmap=None, min=-1, max=1, title='actions over time')
+        # visualize_actions(np.array(portfolio), cmap=None, title='portfolio over time')
+
+    if plot_reference:
+        # plot the average of all stock prices
+        avg = np.mean(env.stock_data, axis=1)
         plt.plot(avg)
         plt.ylabel('Average stock price [$]')
         plt.xlabel('Time step')
@@ -945,7 +1466,9 @@ def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
     std_values = np.std(matrix, axis=1)
 
     # Create a colormap from blue to white to red
-    if cmap == 'binary':
+    if cmap is None:
+        pass
+    elif cmap == 'binary':
         cmap = mpl.colormaps['coolwarm']
     else:
         cmap = mpl.colormaps['Reds']
@@ -954,12 +1477,22 @@ def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
     vmin = min if min is not None else np.min(matrix)
     vmax = max if max is not None else np.max(matrix)
 
-    # Plot the matrix using imshow
-    plt.imshow(matrix, cmap=cmap, vmin=vmin, vmax=vmax)
-    plt.ylabel('time steps')
-    plt.xlabel('features')
-    plt.title(title if title is not None else '')
-    plt.show()
+    if cmap:
+        # Plot the matrix using imshow
+        plt.imshow(matrix, cmap=cmap, vmin=vmin, vmax=vmax)
+        plt.ylabel('time steps')
+        plt.xlabel('features')
+        plt.title(title if title is not None else '')
+        # set width of image to 10 inches
+        plt.show()
+    else:
+        # plot each row of the matrix as a separate line
+        for i in range(matrix.shape[1]):
+            plt.plot(matrix[:, i])
+        plt.ylabel('features')
+        plt.xlabel('time steps')
+        plt.title(title if title is not None else '')
+        plt.show()
 
     # Plot the mean value with a solid line
     plt.plot(mean_values, color='black', label='Mean')
