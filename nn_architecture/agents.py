@@ -502,7 +502,7 @@ class DDPGAgent(Agent):
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
         action = self.actor.forward(state.float())
-        action += torch.from_numpy(self.noise.sample()).to(self.device)
+        action += self.noise.sample().to(self.device)
         if self.limit_low is not None:
             action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
@@ -760,7 +760,7 @@ class TD3Agent(Agent):
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
         action = self.actor.forward(state.float())
-        action += torch.from_numpy(self.noise.sample()).to(self.device)
+        action += self.noise.sample().to(self.device)
         if self.limit_low is not None:
             action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
