@@ -49,21 +49,21 @@ class ObservationSpace:
         if normalized:
             os = [
                 copy.deepcopy((self.cash / self._init_cash)),
-                # copy.deepcopy(self.portfolio / np.max(np.abs(self.portfolio)) if np.max(
-                #     np.abs(self.portfolio)) != 0 else self.portfolio),
-                # copy.deepcopy(self.stock_prices / np.max(self.stock_prices) if np.max(
-                #     self.stock_prices) != 0 else self.stock_prices)
+                copy.deepcopy(self.portfolio / np.max(np.abs(self.portfolio)) if np.max(np.abs(self.portfolio)) != 0 else self.portfolio),
+                copy.deepcopy(self.stock_prices / np.max(self.stock_prices) if np.max(self.stock_prices) != 0 else self.stock_prices)
             ]
         else:
             # os = [copy.deepcopy(self.portfolio), copy.deepcopy(self.stock_prices)]
-            os = [copy.deepcopy(self.cash)]
+            os = [copy.deepcopy(self.cash),
+                  copy.deepcopy(self.portfolio),
+                  copy.deepcopy(self.stock_prices),]
 
         if dtype == tuple:
             return tuple(os)
         elif dtype == torch.Tensor:
             for i, e in enumerate(os):
                 os[i] = torch.tensor(e.reshape(1, -1))
-            return torch.cat(os, dim=1)
+            return torch.cat(os, dim=-1)
 
     def set(self,
             cash=None,
@@ -76,9 +76,12 @@ class ObservationSpace:
         stock_prices: are the last n stock prices (n: observation_length)"""
         # self.portfolio = [portfolio if portfolio is not None else self.portfolio][0]
         # self.portfolio = [self.portfolio - portfolio if portfolio is not None else np.zeros_like(self.portfolio)][0]
-        self.cash = cash if cash is not None else self.cash
-        self.portfolio = portfolio if portfolio is not None else self.portfolio
-        self.stock_prices = stock_prices if stock_prices is not None else self.stock_prices
+        if cash is not None:
+            self.cash = cash
+        if portfolio is not None:
+            self.portfolio = portfolio
+        if stock_prices is not None:
+            self.stock_prices = stock_prices
 
 
 class ActionSpace(object):
@@ -221,7 +224,7 @@ class Environment:
         else:
             done = False
 
-        return self.observation_space(normalized=True), self.reward(reward_scaling=True), done, {}
+        return self.observation_space(normalized=True, dtype=torch.Tensor), self.reward(reward_scaling=True), done, {}
 
     def reward(self, reward_scaling=False):
         # Calculate reward for the current action
@@ -230,7 +233,7 @@ class Environment:
             r *= self.reward_scaling
         return r
 
-    def hard_reset(self, cash=None, random_split=False, split_length=None):
+    def reset(self, cash=None, random_split=False, split_length=None):
         if cash is None:
             # cash = self._cash_init
             self.cash = self._cash_init
