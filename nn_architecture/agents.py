@@ -73,7 +73,7 @@ class OrnsteinUhlenbeckActionNoise:
 
 
 class NormalDistributionActionNoise:
-    def __init__(self, action_dim, mu=0, sigma=0.2, clip=0.5):
+    def __init__(self, action_dim, mu=0, sigma=0.2, clip=0.2):
         self.action_dim = action_dim
         self.mu = mu
         self.sigma = sigma
@@ -439,9 +439,18 @@ class DDPGAgent(Agent):
     training = False
     policy_state = torch.Tensor
 
-    def __init__(self, state_dim, action_dim, hidden_dim=256, num_layers=3,
-                 learning_rate=1e-4, init_w=3e-3, replay_buffer_size=1000000,
-                 limit_high=None, limit_low=None):
+    def __init__(self,
+                 state_dim,
+                 action_dim,
+                 hidden_dim=256,
+                 num_layers=3,
+                 learning_rate=1e-4,
+                 init_w=3e-3,
+                 replay_buffer_size=1000000,
+                 limit_high=None,
+                 limit_low=None,
+                 std_noise=0.2,
+                 clip_noise=0.2):
         """Initializes the networks, determines the availability of cuda
         and initializes the replay buffer and the optimizer.
         """
@@ -454,7 +463,7 @@ class DDPGAgent(Agent):
         self.action_dim = action_dim  # if action_dim else self.env.action_space.shape[0]
         self.state_dim = state_dim  # if state_dim else self.env.observation_space.dim
         self.hidden_dim = hidden_dim
-        self.noise = NormalDistributionActionNoise(self.action_dim)
+        self.noise = NormalDistributionActionNoise(self.action_dim, sigma=std_noise, clip=clip_noise)
         self.limit_high = torch.tensor(limit_high).to(self.device)
         self.limit_low = torch.tensor(limit_low).to(self.device)
 
@@ -691,9 +700,19 @@ class TD3Agent(Agent):
     training = False
     policy_state = torch.Tensor
 
-    def __init__(self, state_dim, action_dim, hidden_dim=256, num_layers=3,
-                 learning_rate=1e-4, init_w=3e-3, replay_buffer_size=1e6,
-                 limit_high=None, limit_low=None, delay=5):
+    def __init__(self,
+                 state_dim,
+                 action_dim,
+                 hidden_dim=256,
+                 num_layers=3,
+                 learning_rate=1e-4,
+                 init_w=3e-3,
+                 replay_buffer_size=1e6,
+                 limit_high=None,
+                 limit_low=None,
+                 delay=5,
+                 std_noise=0.2,
+                 clip_noise=0.2):
         """Initializes the networks, determines the availability of cuda
         and initializes the replay buffer and the optimizer.
         """
@@ -706,7 +725,7 @@ class TD3Agent(Agent):
         self.action_dim = action_dim  # if action_dim else self.env.action_space.shape[0]
         self.state_dim = state_dim  # if state_dim else self.env.observation_space.dim
         self.hidden_dim = hidden_dim
-        self.noise = NormalDistributionActionNoise(self.action_dim)
+        self.noise = NormalDistributionActionNoise(self.action_dim, sigma=std_noise, clip=clip_noise)
         self.limit_high = torch.tensor(limit_high).to(self.device)
         self.limit_low = torch.tensor(limit_low).to(self.device)
         self.delay = delay
@@ -844,7 +863,7 @@ class TD3Agent(Agent):
             'actor': self.actor.state_dict(),
             'target_actor': self.target_actor.state_dict(),
             'actor_optimizer': self.actor_optimizer.state_dict(),
-            'critic_optimizer': self.critic1_optimizer.state_dict(),
+            'critic1_optimizer': self.critic1_optimizer.state_dict(),
             'critic2_optimizer': self.critic2_optimizer.state_dict(),
             'action_dim': self.action_dim,
             'state_dim': self.state_dim,
@@ -863,7 +882,8 @@ class TD3Agent(Agent):
         self.actor.load_state_dict(sac_dict['actor'])
         self.target_actor.load_state_dict(sac_dict['target_actor'])
         self.actor_optimizer.load_state_dict(sac_dict['actor_optimizer'])
-        self.critic_optimizer.load_state_dict(sac_dict['critic_optimizer'])
+        self.critic1_optimizer.load_state_dict(sac_dict['critic_optimizer'])
+        self.critic2_optimizer.load_state_dict(sac_dict['critic2_optimizer'])
         self.num_actions = sac_dict['num_actions']
         print("Loaded checkpoint from path: {}".format(path))
 

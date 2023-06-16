@@ -40,12 +40,7 @@ def simple_train(env: gym.Env, agent: Agent,
     if not num_random_actions:
         num_random_actions = agent.replay_buffer_size/4
 
-    # if render:
-        # fig = plt.figure(figsize=(10, 5))
-
     while episode < max_episodes:
-        # env.hard_reset(random_split=True, split_length=50)
-        # env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
         state = env.reset()[0]
         t = 0
         done = False
@@ -62,16 +57,9 @@ def simple_train(env: gym.Env, agent: Agent,
             # create figure to plot current state and update it continuously
             if render:
                 env.render()
-                # time.sleep(0.01)
-
-                # show_state(fig, env, t)
 
             # Give chosen action to environment to adjust internal parameters and to compute new state
             next_state, reward, done, truncated, _ = env.step(action)
-
-            # create custom reward where euclidian distance to target is the reward
-            # if not done:
-            #     reward = - np.linalg.norm(next_state - env.observation_space.high)
 
             # Append experience to replay buffer
             agent.replay_buffer.push(copy.deepcopy(state.reshape(1, -1)),
@@ -123,7 +111,10 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
 
     while not done and not truncated:
         env.render()
-        action = agent.get_action_exploitation(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
+        if test:
+            action = agent.get_action_exploitation(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
+        else:
+            action = agent.get_action_exploration(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
         state, _, done, truncated, _ = env.step(action)
 
         # total_equity.append(copy.deepcopy(env.total_equity()))

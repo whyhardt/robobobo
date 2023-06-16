@@ -34,18 +34,19 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general
-        'load_checkpoint': False,
-        'file_checkpoint': os.path.join('trained_rl', 'sac_20230616-122529.pt'),
+        'load_checkpoint': True,
+        'file_checkpoint': os.path.join('trained_rl', 'td3_pend.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # rl training
-        'train': True,
+        'train': False,
         'agent': 'td3',
+        'env_id': "Pendulum-v1",
         'max_episodes': 1e1,
         'batch_size': 32,
-        'num_random_actions': 1e1,
+        'num_random_actions': 1e3,
         'train_test_split': 0.8,
         'replay_buffer_size': 1e5,
         'hidden_dim': 64,
@@ -142,7 +143,8 @@ if __name__ == '__main__':
     #                   commission=cfg['commission'], cash=cfg['cash_init'], reward_scaling=cfg['reward_scaling'],
     #                   observation_length=cfg['observation_length'])
     # env = gym.make("LunarLander-v2", render_mode="human")
-    env = gym.make("MountainCarContinuous-v0", render_mode="human")
+    # env = gym.make("MountainCarContinuous-v0", render_mode="human")  # "LunarLander-v2"
+    env = gym.make(cfg['env_id'], render_mode="human")
 
     state_dim = env.observation_space.shape[0]  # 1 + cfg['observation_length'] + train_dl.dataset.data.shape[-1]  # train_dl.dataset.data.shape[2]
     action_dim = env.action_space.shape[0]  # train_dl.dataset.data.shape[-1]
@@ -212,5 +214,5 @@ if __name__ == '__main__':
     # test trained agent on test data
     print('Testing agent on test data')
     # env_test = Environment(test_dl.dataset.data.squeeze(0).numpy(), cash=cfg['cash_init'], observation_length=cfg['observation_length'], commission=cfg['commission'])
-    simple_test(gym.make("MountainCarContinuous-v0", render_mode="human"), agent, test=True, plot=False, plot_reference=False)
+    simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=False, plot=False, plot_reference=False)
     # simple_test_ddpg(env_test, agent, test=False, plot_reference=False)
