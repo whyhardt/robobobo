@@ -47,7 +47,7 @@ def simple_train(env: gym.Env, agent: Agent,
         # env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
         state = env.reset()[0]
         t = 0
-        time_limit=999
+        time_limit = 999
         done = False
         truncated = False
         while not done and not truncated:
@@ -118,12 +118,12 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         agent.eval()
     else:
         agent.train()
-    state = env.reset()
+    state = env.reset()[0]
     # env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
 
     while not done and not truncated:
-        action = agent.get_action_exploitation(state.float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
         env.render()
+        action = agent.get_action_exploitation(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
         state, _, done, truncated, _ = env.step(action)
 
         # total_equity.append(copy.deepcopy(env.total_equity()))
@@ -131,7 +131,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         # portfolio.append(copy.deepcopy(env.portfolio.reshape(-1,)))
         # cash.append(copy.deepcopy(env.cash))
 
-    print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
+    # print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
 
     if plot:
         fig, axs = plt.subplots(4, 1, sharex=True)

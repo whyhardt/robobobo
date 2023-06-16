@@ -9,7 +9,7 @@ import copy
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from backtesting import Backtest, Strategy
+# from backtesting import Backtest, Strategy
 
 
 class ObservationSpace:

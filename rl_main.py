@@ -17,11 +17,11 @@ import torch
 from matplotlib import pyplot as plt
 from torch import nn
 
-from nn_architecture.agents import SACAgent, DDPGAgent
+from nn_architecture.agents import SACAgent, DDPGAgent, TD3Agent
 from nn_architecture.models import TransformerGenerator2, TtsDiscriminator
 from nn_architecture.transformer_autoencoder import TransformerAutoencoder, TransformerAutoencoder_v0
 from utils.ae_dataloader import create_dataloader
-from training import simple_train
+from training import simple_train, simple_test
 from environment import Environment
 
 import gymnasium as gym
@@ -35,23 +35,23 @@ if __name__ == '__main__':
     cfg = {
         # general
         'load_checkpoint': False,
-        'file_checkpoint': os.path.join('trained_rl', 'checkpoint.pt'),
+        'file_checkpoint': os.path.join('trained_rl', 'sac_20230616-122529.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # rl training
         'train': True,
-        'agent': 'ddpg',
-        'max_episodes': 1e2,
+        'agent': 'td3',
+        'max_episodes': 1e1,
         'batch_size': 32,
-        'num_random_actions': 1e3,
+        'num_random_actions': 3e3,
         'train_test_split': 0.8,
         'replay_buffer_size': 1e5,
         'hidden_dim': 64,
         'num_layers': 3,
         'num_layers_sub': 4,
-        'temperature': 1,
+        'temperature': 10,
         'learning_rate': 3e-3,
         'init_w': 3e-3,
         'reward_scaling': 1e-4,
@@ -61,6 +61,9 @@ if __name__ == '__main__':
         'commission': .001,
         'observation_length': 16,
     }
+
+    list_valid_agents = ['sac', 'ddpg', 'td3']
+    assert cfg['agent'] in list_valid_agents, f"Agent must be one of: {list_valid_agents}"
 
     print('Initializing framework...')
 
@@ -146,11 +149,18 @@ if __name__ == '__main__':
     if cfg['agent'] == 'ddpg':
         agent = DDPGAgent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
                           num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
-                          init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'])
+                          init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
+                          limit_low=env.action_space.low, limit_high=env.action_space.high)
+    elif cfg['agent'] == 'td3':
+        agent = TD3Agent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
+                         num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
+                         init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
+                         limit_low=env.action_space.low, limit_high=env.action_space.high)
     elif cfg['agent'] == 'sac':
         agent = SACAgent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
                          num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
-                         init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'])
+                         init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
+                         limit_low=env.action_space.low, limit_high=env.action_space.high)
     else:
         raise NotImplementedError(f"Agent of type {cfg['agent']} is not implemented.")
 
@@ -191,16 +201,16 @@ if __name__ == '__main__':
         agent.save_checkpoint(path_save)
         print('Saved checkpoint to {}'.format(path_save))
 
-        plt.plot(total_equity_final, label='Total final equity [$]')
-        plt.plot(np.convolve(total_equity_final, np.ones(10)/10, mode='valid'), label='Avg. total final equity [$]')
-        plt.ylabel('Total final equity [$]')
-        plt.xlabel('Episode')
-        plt.title('Total final equity after each episode in [$]')
-        plt.legend()
-        plt.show()
+        # plt.plot(total_equity_final, label='Total final equity [$]')
+        # plt.plot(np.convolve(total_equity_final, np.ones(10)/10, mode='valid'), label='Avg. total final equity [$]')
+        # plt.ylabel('Total final equity [$]')
+        # plt.xlabel('Episode')
+        # plt.title('Total final equity after each episode in [$]')
+        # plt.legend()
+        # plt.show()
 
     # test trained agent on test data
     print('Testing agent on test data')
     # env_test = Environment(test_dl.dataset.data.squeeze(0).numpy(), cash=cfg['cash_init'], observation_length=cfg['observation_length'], commission=cfg['commission'])
-    # simple_test_ddpg(env_test, agent, test=True, plot_reference=False)
+    simple_test(gym.make("MountainCarContinuous-v0", render_mode="human"), agent, test=True, plot=False, plot_reference=False)
     # simple_test_ddpg(env_test, agent, test=False, plot_reference=False)
