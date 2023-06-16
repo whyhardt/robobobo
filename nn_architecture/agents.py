@@ -73,7 +73,7 @@ class OrnsteinUhlenbeckActionNoise:
 
 
 class NormalDistributionActionNoise:
-    def __init__(self, action_dim, mu=0, sigma=0.5, clip=0.5):
+    def __init__(self, action_dim, mu=0, sigma=0.2, clip=0.5):
         self.action_dim = action_dim
         self.mu = mu
         self.sigma = sigma
