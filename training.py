@@ -18,7 +18,8 @@ from nn_architecture.agents import Agent
 
 def simple_train(env: gym.Env, agent: Agent,
                  max_episodes: int, batch_size: int, parameter_update_interval: int,
-                 num_random_actions=None, path_checkpoint=None, checkpoint_interval=100, render=True):
+                 num_random_actions=None, path_checkpoint=None, checkpoint_interval=100,
+                 render=True, time_limit=1e9):
     """Batch training method
     This method interacts with the environment and trains the agent in batches.
 
@@ -47,7 +48,6 @@ def simple_train(env: gym.Env, agent: Agent,
         # env.set_observation_space(stock_prices=env.stock_data[:env.observation_length])
         state = env.reset()[0]
         t = 0
-        time_limit = 999
         done = False
         truncated = False
         while not done and not truncated:
@@ -62,7 +62,7 @@ def simple_train(env: gym.Env, agent: Agent,
             # create figure to plot current state and update it continuously
             if render:
                 env.render()
-                time.sleep(0.01)
+                # time.sleep(0.01)
 
                 # show_state(fig, env, t)
 

@@ -45,7 +45,7 @@ if __name__ == '__main__':
         'agent': 'td3',
         'max_episodes': 1e1,
         'batch_size': 32,
-        'num_random_actions': 3e3,
+        'num_random_actions': 1e1,
         'train_test_split': 0.8,
         'replay_buffer_size': 1e5,
         'hidden_dim': 64,
