@@ -34,17 +34,17 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general
-        'load_checkpoint': True,
-        'file_checkpoint': os.path.join('trained_rl', 'td3_pend.pt'),
+        'load_checkpoint': False,
+        'file_checkpoint': os.path.join('trained_rl', 'td3_pend2.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # rl training
         'train': False,
-        'agent': 'td3',
+        'agent': 'ddpg',
         'env_id': "Pendulum-v1",
-        'max_episodes': 1e1,
+        'max_episodes': 1e0,
         'batch_size': 32,
         'num_random_actions': 1e3,
         'train_test_split': 0.8,
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         'num_layers': 3,
         'num_layers_sub': 4,
         'temperature': 10,
-        'learning_rate': 3e-3,
+        'learning_rate': 1e-4,
         'init_w': 3e-3,
         'reward_scaling': 1e-4,
 
@@ -191,28 +191,28 @@ if __name__ == '__main__':
 
     if cfg['train']:
         # Start training
-        total_equity_final, agent = simple_train(env, agent, #data_processor,
-                                                 max_episodes=cfg['max_episodes'],
-                                                 batch_size=cfg['batch_size'],
-                                                 parameter_update_interval=1,
-                                                 path_checkpoint=cfg['file_checkpoint'],
-                                                 checkpoint_interval=cfg['checkpoint_interval'],
-                                                 num_random_actions=cfg['num_random_actions'],)
+        episode_rewards, agent = simple_train(env, agent, #data_processor,
+                                              max_episodes=cfg['max_episodes'],
+                                              batch_size=cfg['batch_size'],
+                                              parameter_update_interval=1,
+                                              path_checkpoint=cfg['file_checkpoint'],
+                                              checkpoint_interval=cfg['checkpoint_interval'],
+                                              num_random_actions=cfg['num_random_actions'],)
 
         path_save = os.path.join('trained_rl', 'sac_' + datetime.now().strftime("%Y%m%d-%H%M%S") + '.pt')
         agent.save_checkpoint(path_save)
         print('Saved checkpoint to {}'.format(path_save))
 
-        # plt.plot(total_equity_final, label='Total final equity [$]')
-        # plt.plot(np.convolve(total_equity_final, np.ones(10)/10, mode='valid'), label='Avg. total final equity [$]')
-        # plt.ylabel('Total final equity [$]')
-        # plt.xlabel('Episode')
-        # plt.title('Total final equity after each episode in [$]')
-        # plt.legend()
-        # plt.show()
+        plt.plot(episode_rewards, label='episode_rewards')
+        plt.plot(np.convolve(episode_rewards, np.ones(10)/10, mode='valid'), label='Avg. rewards')
+        plt.ylabel('Reward')
+        plt.xlabel('Episode')
+        plt.title('Reward after each episode')
+        plt.legend()
+        plt.show()
 
     # test trained agent on test data
     print('Testing agent on test data')
     # env_test = Environment(test_dl.dataset.data.squeeze(0).numpy(), cash=cfg['cash_init'], observation_length=cfg['observation_length'], commission=cfg['commission'])
-    simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=False, plot=False, plot_reference=False)
+    simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=False, plot=True, plot_reference=False)
     # simple_test_ddpg(env_test, agent, test=False, plot_reference=False)

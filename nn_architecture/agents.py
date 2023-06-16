@@ -529,7 +529,7 @@ class DDPGAgent(Agent):
         done = torch.from_numpy(done).float().to(self.device)
 
         # ---------------------- optimize critic ----------------------
-        #
+
         a2 = self.get_action_exploitation(s1).detach()
         next_val = torch.squeeze(self.target_critic.forward(s2, a2).detach())
         y_expected = r1 + gamma * next_val * (1 - done)
@@ -541,7 +541,7 @@ class DDPGAgent(Agent):
         self.critic_optimizer.step()
 
         # ---------------------- optimize actor ----------------------
-        #
+
         pred_a1 = self.get_action_exploration(s1)
         actor_loss = -self.critic.forward(s1, pred_a1).mean()  # TODO: target_critic or critic?? try also mean()
         self.actor_optimizer.zero_grad()
