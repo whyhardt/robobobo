@@ -77,10 +77,12 @@ class NormalDistributionActionNoise:
         self.action_dim = action_dim
         self.mu = mu
         self.sigma = sigma
-        self.clip = clip
+        self.clip = torch.tensor(clip)
+        self.dist = Normal(self.mu, self.sigma)
 
     def sample(self):
-        return np.clip(np.random.normal(self.mu, self.sigma, self.action_dim), -self.clip, self.clip)
+        # return torch.clip(np.random.normal(self.mu, self.sigma, self.action_dim), -self.clip, self.clip)
+        return torch.clip(self.dist.sample(), -self.clip, self.clip)
 
 
 class Agent:
@@ -130,8 +132,8 @@ class SACAgent(Agent):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.hidden_dim = hidden_dim
-        self.limit_high = limit_high
-        self.limit_low = limit_low
+        self.limit_high = torch.tensor(limit_high).to(self.device)
+        self.limit_low = torch.tensor(limit_low).to(self.device)
 
         # initialize SAC networks
         self.value_net = ValueNetwork(self.state_dim, self.hidden_dim,
@@ -191,9 +193,9 @@ class SACAgent(Agent):
         # Draw action by applying scaled tanh-function
         action = mean + std * z
         if self.limit_low is not None:
-            action = torch.clamp(action, min=torch.tensor(self.limit_low))
+            action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
-            action = torch.clamp(action, max=torch.tensor(self.limit_high))
+            action = torch.clamp(action, max=self.limit_high)
 
         # if hold:
         #     # if one action is smaller than the hold threshold, this action is set to 0
@@ -214,9 +216,9 @@ class SACAgent(Agent):
             state = self.state_tensor_to_list(state)
         action, _ = self.policy_net.forward(state)[0]
         if self.limit_low is not None:
-            action = torch.clamp(action, min=torch.tensor(self.limit_low))
+            action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
-            action = torch.clamp(action, max=torch.tensor(self.limit_high))
+            action = torch.clamp(action, max=self.limit_high)
         return action
 
     def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
@@ -453,8 +455,8 @@ class DDPGAgent(Agent):
         self.state_dim = state_dim  # if state_dim else self.env.observation_space.dim
         self.hidden_dim = hidden_dim
         self.noise = NormalDistributionActionNoise(self.action_dim)
-        self.limit_high = limit_high
-        self.limit_low = limit_low
+        self.limit_high = torch.tensor(limit_high).to(self.device)
+        self.limit_low = torch.tensor(limit_low).to(self.device)
 
         # initialize AC network
         self.critic = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=init_w).to(self.device)
@@ -490,9 +492,9 @@ class DDPGAgent(Agent):
             state = self.state_tensor_to_list(state.float())
         action = self.target_actor.forward(state)
         if self.limit_low is not None:
-            action = torch.clamp(action, min=torch.tensor(self.limit_low))
+            action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
-            action = torch.clamp(action, max=torch.tensor(self.limit_high))
+            action = torch.clamp(action, max=self.limit_high)
         return action
 
     def get_action_exploration(self, state):
@@ -502,9 +504,9 @@ class DDPGAgent(Agent):
         action = self.actor.forward(state.float())
         action += torch.from_numpy(self.noise.sample()).to(self.device)
         if self.limit_low is not None:
-            action = torch.clamp(action, min=torch.tensor(self.limit_low))
+            action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
-            action = torch.clamp(action, max=torch.tensor(self.limit_high))
+            action = torch.clamp(action, max=self.limit_high)
         return action
 
     def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
@@ -705,8 +707,8 @@ class TD3Agent(Agent):
         self.state_dim = state_dim  # if state_dim else self.env.observation_space.dim
         self.hidden_dim = hidden_dim
         self.noise = NormalDistributionActionNoise(self.action_dim)
-        self.limit_high = limit_high
-        self.limit_low = limit_low
+        self.limit_high = torch.tensor(limit_high).to(self.device)
+        self.limit_low = torch.tensor(limit_low).to(self.device)
         self.delay = delay
 
         # initialize AC network
@@ -748,9 +750,9 @@ class TD3Agent(Agent):
             state = self.state_tensor_to_list(state.float())
         action = self.target_actor.forward(state)
         if self.limit_low is not None:
-            action = torch.clamp(action, min=torch.tensor(self.limit_low))
+            action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
-            action = torch.clamp(action, max=torch.tensor(self.limit_high))
+            action = torch.clamp(action, max=self.limit_high)
         return action
 
     def get_action_exploration(self, state):
@@ -760,9 +762,9 @@ class TD3Agent(Agent):
         action = self.actor.forward(state.float())
         action += torch.from_numpy(self.noise.sample()).to(self.device)
         if self.limit_low is not None:
-            action = torch.clamp(action, min=torch.tensor(self.limit_low))
+            action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
-            action = torch.clamp(action, max=torch.tensor(self.limit_high))
+            action = torch.clamp(action, max=self.limit_high)
         return action
 
     def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
