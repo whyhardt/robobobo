@@ -17,31 +17,23 @@ from nn_architecture.agents import Agent
 
 
 def simple_train(env: gym.Env, agent: Agent,
-                 max_episodes: int, batch_size: int, parameter_update_interval: int,
+                 num_actions: int, batch_size: int, parameter_update_interval: int,
                  num_random_actions=None, path_checkpoint=None, checkpoint_interval=100,
                  render=True, time_limit=1e9):
-    """Batch training method
-    This method interacts with the environment and trains the agent in batches.
-
-    The environment must be of the following structure:
-    - env.reset() --> returns initial state
-    - env.step(action) --> returns next state, reward, done, info
-    - env.hard_reset() --> resets all environment parameters to initial state
-    - env.soft_reset() --> resets only certain environment parameters to initial state
-    - env.action_space.sample() --> returns random action from the environment action space
-
-    The agent is provided as a class within this file.
+    """
+    This method interacts with the environment and trains the agent in batches on past experience.
+    The agent is provided as an instance of the Agent class.
     """
 
+    agent.num_actions = 0
     episode = 0
     episode_rewards = []
-    total_equity_final = []
     agent.train()
 
-    if not num_random_actions:
-        num_random_actions = agent.replay_buffer_size/4
+    if num_random_actions is None:
+        num_random_actions = num_actions//2
 
-    while episode < max_episodes:
+    while agent.num_actions < num_actions:
         state = env.reset()[0]
         t = 0
         done = False
@@ -80,7 +72,7 @@ def simple_train(env: gym.Env, agent: Agent,
             episode_reward += reward
             agent.num_actions += 1
             t += 1
-            if t == time_limit:
+            if t == time_limit or agent.num_actions == num_actions:
                 truncated = True
 
         # Collect total equity of current episode
@@ -109,6 +101,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         agent.train()
     state = env.reset()[0]
 
+    print(f"\nTest scenario (agent.training={not test}) started.")
     while not done and not truncated:
         env.render()
         if test:
@@ -117,6 +110,8 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
             action = agent.get_action_exploration(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
         state, reward, done, truncated, _ = env.step(action)
         rewards.append(reward)
+    print(f"Test scenario terminated. Total reward: {np.round(np.sum(rewards), 2)}\n")
+    env.close()
 
     # print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
 
@@ -124,6 +119,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         # fig, axs = plt.subplots(4, 1, sharex=True)
 
         plt.plot(rewards, label='reward')
+        plt.plot(np.convolve(rewards, np.ones(10) / 10, mode='valid'), label='reward (smoothed)')
         plt.ylabel('reward')
         plt.xlabel('time steps')
         plt.title("rewards of test")
@@ -154,6 +150,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
     #     plt.xlabel('Time step')
     #     plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
     #     plt.show()
+
 
 
 def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):

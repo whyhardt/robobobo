@@ -33,34 +33,38 @@ if __name__ == '__main__':
     # warnings off
     warnings.filterwarnings("ignore")
     cfg = {
-        # general
-        'load_checkpoint': False,
-        'file_checkpoint': os.path.join('trained_rl', 'td3_pend2.pt'),
+        # general parameters
+        'load_checkpoint': True,
+        'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
-        # rl training
-        'train': False,
-        'agent': 'ddpg',
-        'env_id': "Pendulum-v1",
-        'max_episodes': 1e0,
+        # training parameters
+        'train': True,
+        'agent': 'td3',
+        'env_id': "MountainCarContinuous-v0",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
+        #'max_episodes': 1e0,
+        'num_actions': 1e3,
+        'num_random_actions': None,
         'batch_size': 32,
-        'num_random_actions': 1e3,
+        'temperature': 1,
         'train_test_split': 0.8,
         'replay_buffer_size': 1e5,
-        'hidden_dim': 64,
+
+        # network parameters
+        'hidden_dim': 128,
         'num_layers': 3,
         'num_layers_sub': 4,
-        'temperature': 10,
         'learning_rate': 1e-4,
         'init_w': 3e-3,
-        'reward_scaling': 1e-4,
 
         # environment
+        'time_limit': 1e9,
         'cash_init': 10000,
         'commission': .001,
         'observation_length': 16,
+        'reward_scaling': 1e-4,
     }
 
     list_valid_agents = ['sac', 'ddpg', 'td3']
@@ -192,19 +196,21 @@ if __name__ == '__main__':
     if cfg['train']:
         # Start training
         episode_rewards, agent = simple_train(env, agent, #data_processor,
-                                              max_episodes=cfg['max_episodes'],
+                                              num_actions=cfg['num_actions'],
                                               batch_size=cfg['batch_size'],
                                               parameter_update_interval=1,
                                               path_checkpoint=cfg['file_checkpoint'],
                                               checkpoint_interval=cfg['checkpoint_interval'],
-                                              num_random_actions=cfg['num_random_actions'],)
+                                              num_random_actions=cfg['num_random_actions'],
+                                              time_limit=cfg['time_limit'],)
 
         path_save = os.path.join('trained_rl', 'sac_' + datetime.now().strftime("%Y%m%d-%H%M%S") + '.pt')
         agent.save_checkpoint(path_save)
         print('Saved checkpoint to {}'.format(path_save))
 
         plt.plot(episode_rewards, label='episode_rewards')
-        plt.plot(np.convolve(episode_rewards, np.ones(10)/10, mode='valid'), label='Avg. rewards')
+        if episode_rewards.shape[0] > 10:
+            plt.plot(np.convolve(episode_rewards, np.ones(10)/10, mode='valid'), label='Avg. rewards')
         plt.ylabel('Reward')
         plt.xlabel('Episode')
         plt.title('Reward after each episode')
@@ -214,5 +220,5 @@ if __name__ == '__main__':
     # test trained agent on test data
     print('Testing agent on test data')
     # env_test = Environment(test_dl.dataset.data.squeeze(0).numpy(), cash=cfg['cash_init'], observation_length=cfg['observation_length'], commission=cfg['commission'])
+    simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=True, plot=True, plot_reference=False)
     simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=False, plot=True, plot_reference=False)
-    # simple_test_ddpg(env_test, agent, test=False, plot_reference=False)

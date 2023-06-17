@@ -88,24 +88,31 @@ class NormalDistributionActionNoise:
 class Agent:
     device = torch.device("cpu")
     replay_buffer = ReplayBuffer()
+    num_actions = 0
 
     def __init__(self):
         pass
 
     def get_action_exploitation(self, state):
-        pass
+        raise NotImplementedError
 
     def get_action_exploration(self, state):
-        pass
+        raise NotImplementedError
 
     def update(self, batch_size):
-        pass
+        raise NotImplementedError
 
     def train(self):
-        pass
+        raise NotImplementedError
 
     def eval(self):
-        pass
+        raise NotImplementedError
+
+    def save_checkpoint(self, path):
+        raise NotImplementedError
+
+    def load_checkpoint(self, path):
+        raise NotImplementedError
 
 
 class SACAgent(Agent):
@@ -882,7 +889,7 @@ class TD3Agent(Agent):
         self.actor.load_state_dict(sac_dict['actor'])
         self.target_actor.load_state_dict(sac_dict['target_actor'])
         self.actor_optimizer.load_state_dict(sac_dict['actor_optimizer'])
-        self.critic1_optimizer.load_state_dict(sac_dict['critic_optimizer'])
+        self.critic1_optimizer.load_state_dict(sac_dict['critic1_optimizer'])
         self.critic2_optimizer.load_state_dict(sac_dict['critic2_optimizer'])
         self.num_actions = sac_dict['num_actions']
         print("Loaded checkpoint from path: {}".format(path))
