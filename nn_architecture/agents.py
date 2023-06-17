@@ -717,7 +717,8 @@ class TD3Agent(Agent):
                  replay_buffer_size=1e6,
                  limit_high=None,
                  limit_low=None,
-                 delay=5,
+                 updates_per_step=1,
+                 delay=2,
                  std_noise=0.2,
                  clip_noise=0.2):
         """Initializes the networks, determines the availability of cuda
@@ -736,6 +737,7 @@ class TD3Agent(Agent):
         self.limit_high = torch.tensor(limit_high).to(self.device)
         self.limit_low = torch.tensor(limit_low).to(self.device)
         self.delay = delay
+        self.updates_per_step = updates_per_step
 
         # initialize AC network
         self.critic1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=init_w).to(self.device)
@@ -770,22 +772,28 @@ class TD3Agent(Agent):
         self.num_actions = 0
         self.obs_dims = []  # for self.state_tensor_to_list; will be written at first use of self.state_list_to_tensor
 
-    def get_action_exploitation(self, state):
+    def get_action_exploitation(self, state, target=True):
         """Is used to compute an action during experience gathering and testing"""
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state.float())
-        action = self.target_actor.forward(state)
+        if target:
+            action = self.target_actor.forward(state)
+        else:
+            action = self.actor.forward(state)
         if self.limit_low is not None:
             action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
             action = torch.clamp(action, max=self.limit_high)
         return action
 
-    def get_action_exploration(self, state):
+    def get_action_exploration(self, state, target=False):
         """Is used to compute an action during experience gathering and testing"""
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
-        action = self.actor.forward(state.float())
+        if not target:
+            action = self.actor.forward(state.float())
+        else:
+            action = self.target_actor.forward(state.float())
         action += self.noise.sample().to(self.device)
         if self.limit_low is not None:
             action = torch.clamp(action, min=self.limit_low)
@@ -794,7 +802,7 @@ class TD3Agent(Agent):
         return action
 
     def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
-        for _ in range(self.delay):
+        for i in range(self.updates_per_step):
             # Draw experience from replay buffer
             s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
 
@@ -808,7 +816,7 @@ class TD3Agent(Agent):
 
             # compute (target) Q values
             self.target_actor.eval()
-            a2 = self.get_action_exploitation(s1).detach()
+            a2 = self.get_action_exploration(s1, target=True).detach()
             next_val = torch.min(torch.squeeze(self.target_critic1.forward(s2, a2).detach()), torch.squeeze(self.target_critic2.forward(s2, a2).detach()))
             y_expected = r1 + gamma * next_val * (1 - done)
             y_predicted1 = torch.squeeze(self.critic1.forward(s1, a1))
@@ -824,24 +832,25 @@ class TD3Agent(Agent):
             critic2_loss.backward()
             self.critic2_optimizer.step()
 
-        # ---------------------- optimize actor ----------------------
+            if i % self.delay == 0:
+                # ---------------------- optimize actor ----------------------
 
-        pred_a1 = self.get_action_exploration(s1)
-        actor_loss = -self.critic1.forward(s1, pred_a1).mean()  # TODO: target_critic or critic?? try also mean()
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
+                pred_a1 = self.get_action_exploration(s1, target=False)
+                actor_loss = -self.critic1.forward(s1, pred_a1).mean()
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                self.actor_optimizer.step()
 
-        # ---------------------- update target networks ----------------------
+                # ---------------------- update target networks ----------------------
 
-        for target_param, param in zip(self.target_critic1.parameters(), self.critic1.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+                for target_param, param in zip(self.target_critic1.parameters(), self.critic1.parameters()):
+                    target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-        for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+                for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
+                    target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-        for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+                for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
+                    target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
     def train(self):
         self.training = True

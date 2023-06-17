@@ -45,12 +45,13 @@ if __name__ == '__main__':
         'agent': 'td3',
         'env_id': "MountainCarContinuous-v0",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         #'max_episodes': 1e0,
-        'num_actions': 1e3,
-        'num_random_actions': None,
-        'batch_size': 32,
+        'num_actions': 1e6,
+        'num_random_actions': 1e5,
+        'batch_size': 128,
         'temperature': 1,
         'train_test_split': 0.8,
-        'replay_buffer_size': 1e5,
+        'replay_buffer_size': 1e6,
+        'parameter_update_interval': 50,
 
         # network parameters
         'hidden_dim': 128,
@@ -161,6 +162,7 @@ if __name__ == '__main__':
         agent = TD3Agent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
                          num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
                          init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
+                         updates_per_step=cfg['parameter_update_interval'],
                          limit_low=env.action_space.low, limit_high=env.action_space.high)
     elif cfg['agent'] == 'sac':
         agent = SACAgent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
