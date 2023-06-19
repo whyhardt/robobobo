@@ -302,10 +302,6 @@ class SACAgent(Agent):
             # freeze q-networks
             # for param in self.q_params:
             #     param.requires_grad = False
-            for param in self.q_net1.parameters():
-                param.requires_grad = False
-            for param in self.q_net2.parameters():
-                param.requires_grad = False
             self.q_net1.eval()
             self.q_net2.eval()
             with torch.no_grad():
@@ -326,15 +322,6 @@ class SACAgent(Agent):
                 param.requires_grad = True
             self.q_net1.train()
             self.q_net2.train()
-
-            # check if q-net parameters require grad
-            for param in self.q_net1.parameters():
-                if not param.requires_grad:
-                    print("Q-net1 parameters do not require grad")
-
-            for param in self.q_net2.parameters():
-                if not param.requires_grad:
-                    print("Q-net2 parameters do not require grad")
 
         # Update target networks by self.polyak-averaging
         with torch.no_grad():
