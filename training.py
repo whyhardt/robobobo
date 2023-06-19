@@ -67,7 +67,10 @@ def simple_train(env: gym.Env, agent: Agent,
             # Update parameters each n steps
             if t % parameter_update_interval == 0 and len(agent.replay_buffer) > batch_size*10:
                 # and len(agent.replay_buffer) > num_random_actions \
-                agent.update(batch_size)
+                for i in range(parameter_update_interval):
+                    if i % agent.delay == 0:
+                        update_actor = True
+                    agent.update(batch_size, update_actor)
 
             episode_reward += reward
             agent.num_actions += 1

@@ -1,4 +1,5 @@
 import copy
+import itertools
 import random
 from typing import Optional
 
@@ -89,6 +90,7 @@ class Agent:
     device = torch.device("cpu")
     replay_buffer = ReplayBuffer()
     num_actions = 0
+    delay = 1
 
     def __init__(self):
         pass
@@ -99,7 +101,7 @@ class Agent:
     def get_action_exploration(self, state):
         raise NotImplementedError
 
-    def update(self, batch_size):
+    def update(self, batch_size, update_actor=True):
         raise NotImplementedError
 
     def train(self):
@@ -114,7 +116,7 @@ class Agent:
     def load_checkpoint(self, path):
         raise NotImplementedError
 
-
+# TODO: set target nets in eval mode and check also in update method
 class SACAgent(Agent):
     """Class of the SAC-agent. Initializes the different networks, action-selection-mechanism and update-paradigm"""
 
@@ -123,9 +125,20 @@ class SACAgent(Agent):
     training = False
     policy_state = torch.Tensor
 
-    def __init__(self, temperature=1., state_dim=None, action_dim=None, hidden_dim=256, num_layers=3,
-                 learning_rate=1e-4, init_w=3e-3, hold_threshold=1e-2, replay_buffer_size=1e6,
-                 limit_high=None, limit_low=None):
+    def __init__(self, 
+                 temperature=1., 
+                 state_dim=None, 
+                 action_dim=None, 
+                 hidden_dim=256, 
+                 num_layers=3,
+                 learning_rate=1e-4, 
+                 init_w=3e-3, 
+                 polyak=0.995,
+                 gamma=0.99,
+                 hold_threshold=1e-2, 
+                 replay_buffer_size=1e6,
+                 action_limit_high=None, 
+                 action_limit_low=None):
         """Initializes the networks, determines the availability of cuda
         and initializes the replay buffer and the optimizer.
         """
@@ -139,39 +152,61 @@ class SACAgent(Agent):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.hidden_dim = hidden_dim
-        self.limit_high = torch.tensor(limit_high).to(self.device)
-        self.limit_low = torch.tensor(limit_low).to(self.device)
+        self.action_limit_high = torch.tensor(action_limit_high).to(self.device)
+        self.action_limit_low = torch.tensor(action_limit_low).to(self.device)
+        self.polyak = polyak
+        self.gamma = gamma
 
         # initialize SAC networks
-        self.value_net = ValueNetwork(self.state_dim, self.hidden_dim,
-                                      num_layers=num_layers, init_w=init_w).to(self.device)
-        self.target_value_net = ValueNetwork(self.state_dim, self.hidden_dim,
-                                             num_layers=num_layers, init_w=init_w).to(self.device)
-        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-            target_param.data.copy_(param.data)
+        # self.value_net = ValueNetwork(self.state_dim, self.hidden_dim,
+        #                               num_layers=num_layers, init_w=init_w).to(self.device)
+        # self.target_value_net = ValueNetwork(self.state_dim, self.hidden_dim,
+        #                                      num_layers=num_layers, init_w=init_w).to(self.device)
+        # for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
+        #     target_param.data.copy_(param.data)
 
-        self.soft_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
-                                        num_layers=num_layers, init_w=init_w).to(self.device)
-        self.soft_q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
-                                        num_layers=num_layers, init_w=init_w).to(self.device)
+        self.q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                   num_layers=num_layers, init_w=init_w).to(self.device)
+        self.target_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                          num_layers=num_layers, init_w=init_w).to(self.device)
+        for target_param, param in zip(self.target_q_net1.parameters(), self.q_net1.parameters()):
+            target_param.data.copy_(param.data)
+        # freeze target network and only update via self.polyak averaging
+        for param in self.target_q_net1.parameters():
+            param.requires_grad = False
+        self.target_q_net1.eval()
+
+        self.q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                   num_layers=num_layers, init_w=init_w).to(self.device)
+        self.target_q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
+                                          num_layers=num_layers, init_w=init_w).to(self.device)
+        for target_param, param in zip(self.target_q_net2.parameters(), self.q_net2.parameters()):
+            target_param.data.copy_(param.data)
+        # freeze target network and only update via self.polyak averaging
+        for param in self.target_q_net2.parameters():
+            param.requires_grad = False
+        self.target_q_net2.eval()
+
+        # save q-network parameters for easy access
+        self.q_params = itertools.chain(self.q_net1.parameters(), self.q_net2.parameters())
 
         self.policy_net = SoftPolicyNetwork(num_inputs=self.state_dim, num_actions=self.action_dim,
                                             hidden_dim=self.hidden_dim, num_layers=num_layers,
-                                            init_w=3e-3, log_std_min=-20, log_std_max=2).to(self.device)
+                                            init_w=init_w, log_std_min=-20, log_std_max=2).to(self.device)
 
         # Initializes the networks' cost-function, optimizer and learning rates
-        self.value_criterion = nn.MSELoss()
-        self.soft_q_criterion1 = nn.MSELoss()
-        self.soft_q_criterion2 = nn.MSELoss()
+        # self.value_criterion = nn.MSELoss()
+        self.q1_criterion = nn.MSELoss()
+        self.q2_criterion = nn.MSELoss()
         self.policy_criterion = nn.L1Loss()
 
-        self.value_lr = learning_rate
-        self.soft_q_lr = learning_rate
+        # self.value_lr = learning_rate
+        self.q_lr = learning_rate
         self.policy_lr = learning_rate
 
-        self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=self.value_lr)
-        self.soft_q_optimizer1 = optim.Adam(self.soft_q_net1.parameters(), lr=self.soft_q_lr)
-        self.soft_q_optimizer2 = optim.Adam(self.soft_q_net2.parameters(), lr=self.soft_q_lr)
+        # self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=self.value_lr)
+        self.q1_optimizer = optim.Adam(self.q_net1.parameters(), lr=self.q_lr)
+        self.q2_optimizer = optim.Adam(self.q_net2.parameters(), lr=self.q_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=self.policy_lr)
 
         # Initializes the replay buffer within the agent
@@ -199,10 +234,10 @@ class SACAgent(Agent):
 
         # Draw action by applying scaled tanh-function
         action = mean + std * z
-        if self.limit_low is not None:
-            action = torch.clamp(action, min=self.limit_low)
-        if self.limit_high is not None:
-            action = torch.clamp(action, max=self.limit_high)
+        if self.action_limit_low is not None:
+            action = torch.clamp(action, min=self.action_limit_low)
+        if self.action_limit_high is not None:
+            action = torch.clamp(action, max=self.action_limit_high)
 
         # if hold:
         #     # if one action is smaller than the hold threshold, this action is set to 0
@@ -222,85 +257,94 @@ class SACAgent(Agent):
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
         action, _ = self.policy_net.forward(state)[0]
-        if self.limit_low is not None:
-            action = torch.clamp(action, min=self.limit_low)
-        if self.limit_high is not None:
-            action = torch.clamp(action, max=self.limit_high)
+        if self.action_limit_low is not None:
+            action = torch.clamp(action, min=self.action_limit_low)
+        if self.action_limit_high is not None:
+            action = torch.clamp(action, max=self.action_limit_high)
         return action
 
-    def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
+    def update(self, batch_size, update_actor=True):
         """Update-paradigm"""
 
         # Draw experience from replay buffer
-        state, action, reward, next_state, done = self.replay_buffer.sample(batch_size)
+        s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
 
-        state = torch.from_numpy(state).float().to(self.device)
-        next_state = torch.from_numpy(next_state).float().to(self.device)
-        action = torch.from_numpy(action).float().to(self.device)
-        reward = torch.from_numpy(reward).float().to(self.device)
+        s1 = torch.from_numpy(s1).float().to(self.device)
+        s2 = torch.from_numpy(s2).float().to(self.device)
+        a1 = torch.from_numpy(a1).float().to(self.device)
+        r1 = torch.from_numpy(r1).float().to(self.device)
         done = torch.from_numpy(done).float().to(self.device)
 
         # Get all values, which are necessary for the network updates
-        new_action, log_prob = self.get_action_exploration(state, log_prob=True)
-        predicted_q_value1 = self.soft_q_net1(state, action)
-        predicted_q_value2 = self.soft_q_net2(state, action)
-        predicted_value = self.value_net(state)
+        a1_pred, a1_pred_log_prob = self.get_action_exploration(s1, log_prob=True)
+        a2_pred, a2_pred_log_prob = self.get_action_exploration(s2, log_prob=True)
+        predicted_q_value1 = self.q_net1(s1, a1)
+        predicted_q_value2 = self.q_net2(s1, a1)
+        # predicted_value = self.value_net(s1)
 
         # Training Q Function
-        # Compute target Q-value by taking action-dependent reward into account
-        target_value = self.target_value_net(next_state)
-        target_q_value = reward + (1 - done) * gamma * target_value
+        # Compute target Q-value by taking a1-dependent r1 into account
+        # target_value = self.target_value_net(s2)
+        target_value = torch.min(self.target_q_net1(s2, a2_pred).detach(), self.target_q_net2(s2, a2_pred).detach())
+        target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.temperature * a2_pred_log_prob)
 
         # Compute loss
-        q_value_loss1 = self.soft_q_criterion1(predicted_q_value1, target_q_value.detach().clone())
-        self.soft_q_optimizer1.zero_grad()
+        q_value_loss1 = self.q1_criterion(predicted_q_value1, target_q_value)
+        self.q1_optimizer.zero_grad()
         q_value_loss1.backward()
-        self.soft_q_optimizer1.step()
+        self.q1_optimizer.step()
 
-        q_value_loss2 = self.soft_q_criterion2(predicted_q_value2, target_q_value.detach().clone())
-        self.soft_q_optimizer2.zero_grad()
+        q_value_loss2 = self.q2_criterion(predicted_q_value2, target_q_value)
+        self.q2_optimizer.zero_grad()
         q_value_loss2.backward()
-        self.soft_q_optimizer2.step()
+        self.q2_optimizer.step()
 
-        # Get new predicted q value from updated q networks for coming updates
-        predicted_new_q_value = torch.min(self.soft_q_net1(state, new_action), self.soft_q_net2(state, new_action))
+        if update_actor:
+            # Get new predicted q value from updated q networks for coming updates
+            # freeze q-networks
+            for param in self.q_params:
+                param.requires_grad = False
+            self.q_net1.eval()
+            self.q_net2.eval()
+            predicted_new_q_value = torch.min(self.q_net1(s1, a1_pred), self.q_net2(s1, a1_pred)).detach()
+            
+            # Training Policy Function
+            policy_loss = self.policy_criterion(a1_pred_log_prob*self.temperature, predicted_new_q_value)
+            self.policy_optimizer.zero_grad()
+            policy_loss.backward()
+            self.policy_optimizer.step()
 
-        # Training Value Function
-        # Update State-Value-Network with updated Q-Value and logarithmic probability from policy network
-        # log_prob represents entropy H(selected action)
-        target_value_func = predicted_new_q_value - log_prob * self.temperature
-        value_loss = self.value_criterion(predicted_value, target_value_func.detach())
-        self.value_optimizer.zero_grad()
-        value_loss.backward()
-        self.value_optimizer.step()
-
-        # Training Policy Function
-        policy_loss = self.policy_criterion(log_prob, (predicted_new_q_value / self.temperature).exp())
-        self.policy_optimizer.zero_grad()
-        policy_loss.backward()
-        self.policy_optimizer.step()
+            # unfreeze q-networks
+            for param in self.q_params:
+                param.requires_grad = True
+            self.q_net1.train()
+            self.q_net2.train()
 
         # if any policy_net parameters are nan stop here
         if torch.isnan(torch.stack([torch.sum(param) for param in self.policy_net.parameters()])).any():
             print("Policy Net parameters are nan")
 
-        # Update target value network by polyak-averaging
-        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-            target_param.data.copy_(
-                target_param.data * (1.0 - soft_tau) + param.data * soft_tau
-            )
+        # Update target networks by self.polyak-averaging
+        with torch.no_grad():
+            for target_param, param in zip(self.target_q_net1.parameters(), self.q_net1.parameters()):
+                target_param.data.mul_(self.polyak)
+                target_param.data.add_(param.data * (1-self.polyak))
 
+            for target_param, param in zip(self.target_q_net2.parameters(), self.q_net2.parameters()):
+                target_param.data.mul_(self.polyak)
+                target_param.data.add_(param.data * (1 - self.polyak))
+                
     def save_checkpoint(self, path):
         sac_dict = {
-            'value_net': self.value_net.state_dict(),
-            'target_value_net': self.target_value_net.state_dict(),
-            'soft_q_net1': self.soft_q_net1.state_dict(),
-            'soft_q_net2': self.soft_q_net2.state_dict(),
+            # 'value_net': self.value_net.state_dict(),
+            # 'target_value_net': self.target_value_net.state_dict(),
+            'soft_q_net1': self.q_net1.state_dict(),
+            'soft_q_net2': self.q_net2.state_dict(),
             'policy_net': self.policy_net.state_dict(),
             'policy_optimizer': self.policy_optimizer.state_dict(),
-            'value_optimizer': self.value_optimizer.state_dict(),
-            'soft_q_optimizer1': self.soft_q_optimizer1.state_dict(),
-            'soft_q_optimizer2': self.soft_q_optimizer2.state_dict(),
+            # 'value_optimizer': self.value_optimizer.state_dict(),
+            'soft_q_optimizer1': self.q1_optimizer.state_dict(),
+            'soft_q_optimizer2': self.q2_optimizer.state_dict(),
             'temperature': self.temperature,
             'action_dim': self.action_dim,
             'state_dim': self.state_dim,
@@ -313,15 +357,15 @@ class SACAgent(Agent):
 
     def load_checkpoint(self, path):
         sac_dict = torch.load(path, map_location=self.device)
-        self.value_net.load_state_dict(sac_dict['value_net'])
-        self.target_value_net.load_state_dict(sac_dict['target_value_net'])
-        self.soft_q_net1.load_state_dict(sac_dict['soft_q_net1'])
-        self.soft_q_net2.load_state_dict(sac_dict['soft_q_net2'])
+        # self.value_net.load_state_dict(sac_dict['value_net'])
+        # self.target_value_net.load_state_dict(sac_dict['target_value_net'])
+        self.q_net1.load_state_dict(sac_dict['soft_q_net1'])
+        self.q_net2.load_state_dict(sac_dict['soft_q_net2'])
         self.policy_net.load_state_dict(sac_dict['policy_net'])
         self.policy_optimizer.load_state_dict(sac_dict['policy_optimizer'])
-        self.value_optimizer.load_state_dict(sac_dict['value_optimizer'])
-        self.soft_q_optimizer1.load_state_dict(sac_dict['soft_q_optimizer1'])
-        self.soft_q_optimizer2.load_state_dict(sac_dict['soft_q_optimizer2'])
+        # self.value_optimizer.load_state_dict(sac_dict['value_optimizer'])
+        self.q1_optimizer.load_state_dict(sac_dict['soft_q_optimizer1'])
+        self.q2_optimizer.load_state_dict(sac_dict['soft_q_optimizer2'])
         self.temperature = sac_dict['temperature']
         self.num_actions = sac_dict['num_actions']
         print("Loaded checkpoint from path: {}".format(path))
@@ -453,6 +497,8 @@ class DDPGAgent(Agent):
                  num_layers=3,
                  learning_rate=1e-4,
                  init_w=3e-3,
+                 polyak=0.995,
+                 gamma=0.99,
                  replay_buffer_size=1000000,
                  limit_high=None,
                  limit_low=None,
@@ -473,7 +519,9 @@ class DDPGAgent(Agent):
         self.noise = NormalDistributionActionNoise(self.action_dim, sigma=std_noise, clip=clip_noise)
         self.limit_high = torch.tensor(limit_high).to(self.device)
         self.limit_low = torch.tensor(limit_low).to(self.device)
-
+        self.polyak = polyak
+        self.gamma = gamma
+        
         # initialize AC network
         self.critic = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=init_w).to(self.device)
         self.target_critic = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=init_w).to(self.device)
@@ -484,6 +532,12 @@ class DDPGAgent(Agent):
         self.target_actor = PolicyNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=3e-3).to(self.device)
         for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
             target_param.data.copy_(param.data)
+
+        # freeze target networks with respect to optimizers (only update via self.polyak averaging)
+        for param in self.target_critic.parameters():
+            param.requires_grad = False
+        for param in self.target_actor.parameters():
+            param.requires_grad = False
 
         # Initializes the networks' cost-function, optimizer and learning rates
         self.critic_loss = nn.MSELoss()
@@ -502,22 +556,28 @@ class DDPGAgent(Agent):
         self.num_actions = 0
         self.obs_dims = []  # for self.state_tensor_to_list; will be written at first use of self.state_list_to_tensor
 
-    def get_action_exploitation(self, state):
+    def get_action_exploitation(self, state, target=True):
         """Is used to compute an action during experience gathering and testing"""
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state.float())
-        action = self.target_actor.forward(state)
+        if target:
+            action = self.target_actor.forward(state)
+        else:
+            action = self.actor.forward(state)
         if self.limit_low is not None:
             action = torch.clamp(action, min=self.limit_low)
         if self.limit_high is not None:
             action = torch.clamp(action, max=self.limit_high)
         return action
 
-    def get_action_exploration(self, state):
+    def get_action_exploration(self, state, target=False):
         """Is used to compute an action during experience gathering and testing"""
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
-        action = self.actor.forward(state.float())
+        if not target:
+            action = self.actor.forward(state.float())
+        else:
+            action = self.target_actor.forward(state.float())
         action += self.noise.sample().to(self.device)
         if self.limit_low is not None:
             action = torch.clamp(action, min=self.limit_low)
@@ -525,7 +585,7 @@ class DDPGAgent(Agent):
             action = torch.clamp(action, max=self.limit_high)
         return action
 
-    def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
+    def update(self, batch_size):
         # Draw experience from replay buffer
         s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
 
@@ -536,10 +596,10 @@ class DDPGAgent(Agent):
         done = torch.from_numpy(done).float().to(self.device)
 
         # ---------------------- optimize critic ----------------------
-
-        a2 = self.get_action_exploitation(s1).detach()
-        next_val = torch.squeeze(self.target_critic.forward(s2, a2).detach())
-        y_expected = r1 + gamma * next_val * (1 - done)
+        with torch.no_grad():
+            a2_pred = self.get_action_exploitation(s2, target=True)
+            next_val = torch.squeeze(self.target_critic.forward(s2, a2_pred))
+            y_expected = r1 + self.gamma * next_val * (1 - done)
         y_predicted = torch.squeeze(self.critic.forward(s1, a1))
         # compute critic loss
         critic_loss = self.critic_loss(y_predicted, y_expected)
@@ -548,20 +608,29 @@ class DDPGAgent(Agent):
         self.critic_optimizer.step()
 
         # ---------------------- optimize actor ----------------------
+        # freeze critic so you don't waste computational effort
+        for param in self.critic.parameters():
+            param.requires_grad = False
 
-        pred_a1 = self.get_action_exploration(s1)
-        actor_loss = -self.critic.forward(s1, pred_a1).mean()  # TODO: target_critic or critic?? try also mean()
+        a1_pred = self.get_action_exploration(s1)
+        actor_loss = -self.critic.forward(s1, a1_pred).mean()  # TODO: target_critic or critic?? try also mean()
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
-        # ---------------------- update target networks ----------------------
-        #
-        for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        # unfreeze critic so you can optimize it again next iteration
+        for param in self.critic.parameters():
+            param.requires_grad = True
 
-        for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        # ---------------------- update target networks ----------------------
+        with torch.no_grad():
+            for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
+                target_param.data.mul_(self.polyak)
+                target_param.data.add_(param.data * (1 - self.polyak))
+
+            for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
+                target_param.data.mul_(self.polyak)
+                target_param.data.add_(param.data * (1 - self.polyak))
 
     def train(self):
         self.training = True
@@ -714,13 +783,14 @@ class TD3Agent(Agent):
                  num_layers=3,
                  learning_rate=1e-4,
                  init_w=3e-3,
+                 polyak=0.995,
+                 gamma=0.99,
                  replay_buffer_size=1e6,
                  limit_high=None,
                  limit_low=None,
-                 updates_per_step=1,
                  delay=2,
                  std_noise=0.2,
-                 clip_noise=0.2):
+                 clip_noise=0.2,):
         """Initializes the networks, determines the availability of cuda
         and initializes the replay buffer and the optimizer.
         """
@@ -737,7 +807,8 @@ class TD3Agent(Agent):
         self.limit_high = torch.tensor(limit_high).to(self.device)
         self.limit_low = torch.tensor(limit_low).to(self.device)
         self.delay = delay
-        self.updates_per_step = updates_per_step
+        self.polyak = polyak
+        self.gamma = gamma
 
         # initialize AC network
         self.critic1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=init_w).to(self.device)
@@ -754,6 +825,21 @@ class TD3Agent(Agent):
         self.target_actor = PolicyNetwork(self.state_dim, self.action_dim, self.hidden_dim, num_layers=num_layers, init_w=3e-3).to(self.device)
         for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
             target_param.data.copy_(param.data)
+
+        # freeze target networks with respect to optimizers (only update via self.polyak averaging)
+        for param in self.target_critic1.parameters():
+            param.requires_grad = False
+        for param in self.target_critic2.parameters():
+            param.requires_grad = False
+        for param in self.target_actor.parameters():
+            param.requires_grad = False
+        # set target networks into evaluation mode
+        self.target_critic1.eval()
+        self.target_critic2.eval()
+        self.target_actor.eval()
+
+        # save q-network parameters for easy access
+        self.q_params = itertools.chain(self.critic1.parameters(), self.critic2.parameters())
 
         # Initializes the networks' cost-function, optimizer and learning rates
         self.critic_loss = nn.MSELoss()
@@ -801,56 +887,68 @@ class TD3Agent(Agent):
             action = torch.clamp(action, max=self.limit_high)
         return action
 
-    def update(self, batch_size, gamma=0.99, soft_tau=1e-1):
-        for i in range(self.updates_per_step):
-            # Draw experience from replay buffer
-            s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
+    def update(self, batch_size, update_actor=True):
+        # Draw experience from replay buffer
+        s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
 
-            s1 = torch.from_numpy(s1).float().to(self.device)
-            s2 = torch.from_numpy(s2).float().to(self.device)
-            a1 = torch.from_numpy(a1).float().to(self.device)
-            r1 = torch.from_numpy(r1).float().to(self.device)
-            done = torch.from_numpy(done).float().to(self.device)
+        s1 = torch.from_numpy(s1).float().to(self.device)
+        s2 = torch.from_numpy(s2).float().to(self.device)
+        a1 = torch.from_numpy(a1).float().to(self.device)
+        r1 = torch.from_numpy(r1).float().to(self.device)
+        done = torch.from_numpy(done).float().to(self.device)
 
-            # ---------------------- optimize critic ----------------------
+        # ---------------------- optimize critic ----------------------
 
-            # compute (target) Q values
-            self.target_actor.eval()
-            a2 = self.get_action_exploration(s1, target=True).detach()
-            next_val = torch.min(torch.squeeze(self.target_critic1.forward(s2, a2).detach()), torch.squeeze(self.target_critic2.forward(s2, a2).detach()))
-            y_expected = r1 + gamma * next_val * (1 - done)
-            y_predicted1 = torch.squeeze(self.critic1.forward(s1, a1))
-            y_predicted2 = torch.squeeze(self.critic2.forward(s1, a1))
+        # compute (target) Q values
+        with torch.no_grad():
+            a2_pred = self.get_action_exploration(s2, target=True)
+            next_val = torch.min(torch.squeeze(self.target_critic1.forward(s2, a2_pred)), torch.squeeze(self.target_critic2.forward(s2, a2_pred)))
+            y_expected = r1 + self.gamma * next_val * (1 - done)
+        y_predicted1 = torch.squeeze(self.critic1.forward(s1, a1))
+        y_predicted2 = torch.squeeze(self.critic2.forward(s1, a1))
 
-            # compute critic loss
-            critic1_loss = self.critic_loss(y_predicted1, y_expected)
-            self.critic1_optimizer.zero_grad()
-            critic1_loss.backward()
-            self.critic1_optimizer.step()
-            critic2_loss = self.critic_loss(y_predicted2, y_expected)
-            self.critic2_optimizer.zero_grad()
-            critic2_loss.backward()
-            self.critic2_optimizer.step()
+        # compute critic loss
+        critic1_loss = self.critic_loss(y_predicted1, y_expected)
+        self.critic1_optimizer.zero_grad()
+        critic1_loss.backward()
+        self.critic1_optimizer.step()
+        critic2_loss = self.critic_loss(y_predicted2, y_expected)
+        self.critic2_optimizer.zero_grad()
+        critic2_loss.backward()
+        self.critic2_optimizer.step()
 
-            if i % self.delay == 0:
-                # ---------------------- optimize actor ----------------------
+        if update_actor:
+            # ---------------------- optimize actor ----------------------
+            # freeze critic and set in eval mode
+            for param in self.critic1.parameters():
+                param.requires_grad = False
+            self.critic1.eval()
 
-                pred_a1 = self.get_action_exploration(s1, target=False)
-                actor_loss = -self.critic1.forward(s1, pred_a1).mean()
-                self.actor_optimizer.zero_grad()
-                actor_loss.backward()
-                self.actor_optimizer.step()
+            a1_pred = self.get_action_exploitation(s1, target=False)
+            actor_loss = -self.critic1.forward(s1, a1_pred).mean()
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
 
-                # ---------------------- update target networks ----------------------
+            # unfreeze critic and set in train mode
+            for param in self.critic1.parameters():
+                param.requires_grad = True
+            self.critic1.train()
 
-                for target_param, param in zip(self.target_critic1.parameters(), self.critic1.parameters()):
-                    target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-
-                for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
-                    target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-
+            with torch.no_grad():
                 for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
-                    target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+                    target_param.data.mul_(self.polyak)
+                    target_param.data.add_((1 - self.polyak) * param.data)
+
+        # ---------------------- update target q networks ----------------------
+        with torch.no_grad():
+            for target_param, param in zip(self.target_critic1.parameters(), self.critic1.parameters()):
+                target_param.data.mul_(self.polyak)
+                target_param.data.add_((1 - self.polyak) * param.data)
+
+            for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
+                target_param.data.mul_(self.polyak)
+                target_param.data.add_((1 - self.polyak) * param.data)
 
     def train(self):
         self.training = True

@@ -35,29 +35,30 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': True,
-        'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar.pt'),
+        'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar2.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': True,
+        'train': False,
         'agent': 'td3',
         'env_id': "MountainCarContinuous-v0",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        #'max_episodes': 1e0,
         'num_actions': 1e6,
         'num_random_actions': 1e5,
         'batch_size': 128,
-        'temperature': 1,
+        'learning_rate': 1e-3,
+        'temperature': .2,
         'train_test_split': 0.8,
         'replay_buffer_size': 1e6,
         'parameter_update_interval': 50,
+        'polyak': 0.995,
+        'gamma': 0.99,
 
         # network parameters
         'hidden_dim': 128,
         'num_layers': 3,
         'num_layers_sub': 4,
-        'learning_rate': 1e-4,
         'init_w': 3e-3,
 
         # environment
@@ -157,18 +158,20 @@ if __name__ == '__main__':
         agent = DDPGAgent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
                           num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
                           init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
-                          limit_low=env.action_space.low, limit_high=env.action_space.high)
+                          limit_low=env.action_space.low, limit_high=env.action_space.high,
+                          polyak=cfg['polyak'], gamma=cfg['gamma'],)
     elif cfg['agent'] == 'td3':
         agent = TD3Agent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
                          num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
                          init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
-                         updates_per_step=cfg['parameter_update_interval'],
-                         limit_low=env.action_space.low, limit_high=env.action_space.high)
+                         limit_low=env.action_space.low, limit_high=env.action_space.high,
+                         polyak=cfg['polyak'], gamma=cfg['gamma'],)
     elif cfg['agent'] == 'sac':
         agent = SACAgent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
                          num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
                          init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
-                         limit_low=env.action_space.low, limit_high=env.action_space.high)
+                         action_limit_low=env.action_space.low, action_limit_high=env.action_space.high,
+                         polyak=cfg['polyak'], gamma=cfg['gamma'],)
     else:
         raise NotImplementedError(f"Agent of type {cfg['agent']} is not implemented.")
 
@@ -200,7 +203,7 @@ if __name__ == '__main__':
         episode_rewards, agent = simple_train(env, agent, #data_processor,
                                               num_actions=cfg['num_actions'],
                                               batch_size=cfg['batch_size'],
-                                              parameter_update_interval=1,
+                                              parameter_update_interval=cfg['parameter_update_interval'],
                                               path_checkpoint=cfg['file_checkpoint'],
                                               checkpoint_interval=cfg['checkpoint_interval'],
                                               num_random_actions=cfg['num_random_actions'],
@@ -222,5 +225,6 @@ if __name__ == '__main__':
     # test trained agent on test data
     print('Testing agent on test data')
     # env_test = Environment(test_dl.dataset.data.squeeze(0).numpy(), cash=cfg['cash_init'], observation_length=cfg['observation_length'], commission=cfg['commission'])
-    simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=True, plot=True, plot_reference=False)
+    # simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=True, plot=True, plot_reference=False)
+    print(f"number actions: {agent.num_actions}")
     simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=False, plot=True, plot_reference=False)
