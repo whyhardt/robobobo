@@ -133,7 +133,8 @@ class SACAgent(Agent):
                  hidden_dim=256, 
                  num_layers=3,
                  learning_rate=1e-4, 
-                 init_w=3e-3, 
+                 init_w=3e-3,
+                 dropout=0.0,
                  polyak=0.995,
                  gamma=0.99,
                  hold_threshold=1e-2, 
@@ -160,9 +161,9 @@ class SACAgent(Agent):
 
         # initialize SAC networks
         self.q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
-                                   num_layers=num_layers, init_w=init_w).to(self.device)
+                                   num_layers=num_layers, init_w=init_w, dropout=dropout).to(self.device)
         self.target_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
-                                          num_layers=num_layers, init_w=init_w).to(self.device)
+                                          num_layers=num_layers, init_w=init_w, dropout=dropout).to(self.device)
         for target_param, param in zip(self.target_q_net1.parameters(), self.q_net1.parameters()):
             target_param.data.copy_(param.data)
         # freeze target network and only update via self.polyak averaging
@@ -171,9 +172,9 @@ class SACAgent(Agent):
         self.target_q_net1.eval()
 
         self.q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
-                                   num_layers=num_layers, init_w=init_w).to(self.device)
+                                   num_layers=num_layers, init_w=init_w, dropout=dropout).to(self.device)
         self.target_q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
-                                          num_layers=num_layers, init_w=init_w).to(self.device)
+                                          num_layers=num_layers, init_w=init_w, dropout=dropout).to(self.device)
         for target_param, param in zip(self.target_q_net2.parameters(), self.q_net2.parameters()):
             target_param.data.copy_(param.data)
         # freeze target network and only update via self.polyak averaging
@@ -185,7 +186,7 @@ class SACAgent(Agent):
         # self.q_params = itertools.chain(self.q_net1.parameters(), self.q_net2.parameters())
 
         self.policy_net = SoftPolicyNetwork(num_inputs=self.state_dim, num_actions=self.action_dim,
-                                            hidden_dim=self.hidden_dim, num_layers=num_layers,
+                                            hidden_dim=self.hidden_dim, num_layers=num_layers, dropout=dropout,
                                             init_w=init_w, log_std_min=-20, log_std_max=2).to(self.device)
 
         # Initializes the networks' cost-function, optimizer and learning rates

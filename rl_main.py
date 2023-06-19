@@ -41,7 +41,7 @@ if __name__ == '__main__':
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': False,
+        'train': True,
         'agent': 'sac',
         'env_id': "Pendulum-v1",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_actions': 5e2,
@@ -60,6 +60,7 @@ if __name__ == '__main__':
         'num_layers': 3,
         'num_layers_sub': 4,
         'init_w': 3e-3,
+        'dropout': 0.0,
 
         # environment
         'time_limit': 1e9,
@@ -168,7 +169,7 @@ if __name__ == '__main__':
                          polyak=cfg['polyak'], gamma=cfg['gamma'],)
     elif cfg['agent'] == 'sac':
         agent = SACAgent(state_dim=state_dim, action_dim=action_dim, hidden_dim=cfg['hidden_dim'],
-                         num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'],
+                         num_layers=cfg['num_layers'], learning_rate=cfg['learning_rate'], dropout=cfg['dropout'],
                          init_w=cfg['init_w'], replay_buffer_size=cfg['replay_buffer_size'],
                          action_limit_low=env.action_space.low, action_limit_high=env.action_space.high,
                          polyak=cfg['polyak'], gamma=cfg['gamma'],)
