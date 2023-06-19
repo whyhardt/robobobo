@@ -158,13 +158,6 @@ class SACAgent(Agent):
         self.gamma = gamma
 
         # initialize SAC networks
-        # self.value_net = ValueNetwork(self.state_dim, self.hidden_dim,
-        #                               num_layers=num_layers, init_w=init_w).to(self.device)
-        # self.target_value_net = ValueNetwork(self.state_dim, self.hidden_dim,
-        #                                      num_layers=num_layers, init_w=init_w).to(self.device)
-        # for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-        #     target_param.data.copy_(param.data)
-
         self.q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
                                    num_layers=num_layers, init_w=init_w).to(self.device)
         self.target_q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
@@ -282,15 +275,21 @@ class SACAgent(Agent):
             target_value = torch.min(self.target_q_net1(s2, a2_pred), self.target_q_net2(s2, a2_pred))
             target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.temperature * a2_pred_log_prob)
 
+        # check if q-net parameters require grad
+        for param in self.q_net1.parameters():
+            if not param.requires_grad:
+                print("Q-net1 parameters do not require grad")
+
+        for param in self.q_net2.parameters():
+            if not param.requires_grad:
+                print("Q-net2 parameters do not require grad")
+
         # Compute loss
-        try:
-            predicted_q_value1 = self.q_net1(s1, a1)
-            q_value_loss1 = self.q1_criterion(predicted_q_value1, target_q_value)
-            self.q1_optimizer.zero_grad()
-            q_value_loss1.backward()
-            self.q1_optimizer.step()
-        except:
-            print("Error in q1 update")
+        predicted_q_value1 = self.q_net1(s1, a1)
+        q_value_loss1 = self.q1_criterion(predicted_q_value1, target_q_value)
+        self.q1_optimizer.zero_grad()
+        q_value_loss1.backward()
+        self.q1_optimizer.step()
         predicted_q_value2 = self.q_net2(s1, a1)
         q_value_loss2 = self.q2_criterion(predicted_q_value2, target_q_value)
         self.q2_optimizer.zero_grad()
@@ -301,7 +300,11 @@ class SACAgent(Agent):
             a1_pred, a1_pred_log_prob = self.get_action_exploration(s1, log_prob=True)
             # Get new predicted q value from updated q networks for coming updates
             # freeze q-networks
-            for param in self.q_params:
+            # for param in self.q_params:
+            #     param.requires_grad = False
+            for param in self.q_net1.parameters():
+                param.requires_grad = False
+            for param in self.q_net2.parameters():
                 param.requires_grad = False
             self.q_net1.eval()
             self.q_net2.eval()
@@ -315,14 +318,23 @@ class SACAgent(Agent):
             self.policy_optimizer.step()
 
             # unfreeze q-networks
-            for param in self.q_params:
+            # for param in self.q_params:
+            #     param.requires_grad = True
+            for param in self.q_net1.parameters():
+                param.requires_grad = True
+            for param in self.q_net2.parameters():
                 param.requires_grad = True
             self.q_net1.train()
             self.q_net2.train()
 
-        # if any policy_net parameters are nan stop here
-        if torch.isnan(torch.stack([torch.sum(param) for param in self.policy_net.parameters()])).any():
-            print("Policy Net parameters are nan")
+            # check if q-net parameters require grad
+            for param in self.q_net1.parameters():
+                if not param.requires_grad:
+                    print("Q-net1 parameters do not require grad")
+
+            for param in self.q_net2.parameters():
+                if not param.requires_grad:
+                    print("Q-net2 parameters do not require grad")
 
         # Update target networks by self.polyak-averaging
         with torch.no_grad():
