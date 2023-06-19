@@ -181,7 +181,7 @@ class SACAgent(Agent):
         self.target_q_net2.eval()
 
         # save q-network parameters for easy access
-        self.q_params = itertools.chain(self.q_net1.parameters(), self.q_net2.parameters())
+        # self.q_params = itertools.chain(self.q_net1.parameters(), self.q_net2.parameters())
 
         self.policy_net = SoftPolicyNetwork(num_inputs=self.state_dim, num_actions=self.action_dim,
                                             hidden_dim=self.hidden_dim, num_layers=num_layers,
