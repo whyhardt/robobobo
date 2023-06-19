@@ -116,7 +116,7 @@ class Agent:
     def load_checkpoint(self, path):
         raise NotImplementedError
 
-# TODO: set target nets in eval mode and check also in update method
+
 class SACAgent(Agent):
     """Class of the SAC-agent. Initializes the different networks, action-selection-mechanism and update-paradigm"""
 
@@ -373,10 +373,18 @@ class SACAgent(Agent):
     def train(self):
         self.training = True
         self.policy_net.train()
+        self.q_net1.train()
+        self.target_q_net1.train()
+        self.q_net2.train()
+        self.target_q_net2.train()
 
     def eval(self):
         self.training = False
         self.policy_net.eval()
+        self.q_net1.eval()
+        self.target_q_net1.eval()
+        self.q_net2.eval()
+        self.target_q_net2.eval()
 
     def state_list_to_tensor(self, state):
         state = list(state)
@@ -585,7 +593,7 @@ class DDPGAgent(Agent):
             action = torch.clamp(action, max=self.limit_high)
         return action
 
-    def update(self, batch_size):
+    def update(self, batch_size, update_actor=True):
         # Draw experience from replay buffer
         s1, a1, r1, s2, done = self.replay_buffer.sample(batch_size)
 
@@ -607,28 +615,30 @@ class DDPGAgent(Agent):
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        # ---------------------- optimize actor ----------------------
-        # freeze critic so you don't waste computational effort
-        for param in self.critic.parameters():
-            param.requires_grad = False
+        if update_actor:
+            # ---------------------- optimize actor ----------------------
+            # freeze critic so you don't waste computational effort
+            for param in self.critic.parameters():
+                param.requires_grad = False
 
-        a1_pred = self.get_action_exploration(s1)
-        actor_loss = -self.critic.forward(s1, a1_pred).mean()  # TODO: target_critic or critic?? try also mean()
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
+            a1_pred = self.get_action_exploration(s1)
+            actor_loss = -self.critic.forward(s1, a1_pred).mean()  # TODO: target_critic or critic?? try also mean()
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
 
-        # unfreeze critic so you can optimize it again next iteration
-        for param in self.critic.parameters():
-            param.requires_grad = True
+            # unfreeze critic so you can optimize it again next iteration
+            for param in self.critic.parameters():
+                param.requires_grad = True
+
+            with torch.no_grad():
+                for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
+                    target_param.data.mul_(self.polyak)
+                    target_param.data.add_(param.data * (1 - self.polyak))
 
         # ---------------------- update target networks ----------------------
         with torch.no_grad():
             for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
-                target_param.data.mul_(self.polyak)
-                target_param.data.add_(param.data * (1 - self.polyak))
-
-            for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
                 target_param.data.mul_(self.polyak)
                 target_param.data.add_(param.data * (1 - self.polyak))
 

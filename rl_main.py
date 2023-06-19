@@ -34,18 +34,18 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
+        'load_checkpoint': False,
         'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar2.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': False,
+        'train': True,
         'agent': 'td3',
         'env_id': "MountainCarContinuous-v0",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'num_actions': 1e6,
-        'num_random_actions': 1e5,
+        'num_actions': 2e3,
+        'num_random_actions': 1e3,
         'batch_size': 128,
         'learning_rate': 1e-3,
         'temperature': .2,
@@ -54,6 +54,7 @@ if __name__ == '__main__':
         'parameter_update_interval': 50,
         'polyak': 0.995,
         'gamma': 0.99,
+        ''
 
         # network parameters
         'hidden_dim': 128,

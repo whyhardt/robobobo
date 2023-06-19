@@ -104,7 +104,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         agent.train()
     state = env.reset()[0]
 
-    print(f"\nTest scenario (agent.training={not test}) started.")
+    print(f"\nTest scenario (agent.train={agent.train}) started.")
     while not done and not truncated:
         env.render()
         if test:
@@ -153,7 +153,6 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
     #     plt.xlabel('Time step')
     #     plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
     #     plt.show()
-
 
 
 def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
