@@ -107,6 +107,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
     done = False
     truncated = False
     rewards = []
+    actions = []
     if test:
         agent.eval()
     else:
@@ -122,6 +123,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
             action = agent.get_action_exploration(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
         state, reward, done, truncated, _ = env.step(action)
         rewards.append(copy.deepcopy(reward))
+        actions.append(copy.deepcopy(action[0]))
     print(f"Test scenario terminated. Total reward: {np.round(np.sum(rewards), 2)}\n")
     env.close()
 
@@ -136,6 +138,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         plt.xlabel('time steps')
         plt.title("rewards of test")
         plt.legend()
+        plt.show()
         # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
         # axs[0].plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
 
@@ -149,10 +152,18 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         # axs[3].set_ylabel('Actions')
         # axs[3].set_xlabel('Time steps')
 
-        plt.show()
+
 
         # visualize_actions(np.array(actions), cmap=None, min=-1, max=1, title='actions over time')
         # visualize_actions(np.array(portfolio), cmap=None, title='portfolio over time')
+
+        plt.plot(actions, label='actions')
+        plt.plot(np.convolve(actions, np.ones(10) / 10, mode='valid'), label='actions (smoothed)')
+        plt.ylabel('actions')
+        plt.xlabel('time steps')
+        plt.title("actions of test")
+        plt.legend()
+        plt.show()
 
     # if plot_reference:
     #     # plot the average of all stock prices

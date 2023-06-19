@@ -34,21 +34,21 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar_fixed.pt'),
+        'load_checkpoint': True,
+        'file_checkpoint': os.path.join('trained_rl', 'sac_20230619-193740.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': True,
+        'train': False,
         'agent': 'sac',
-        'env_id': "MountainCarContinuous-v0",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'num_actions': 2e3,
-        'num_random_actions': 5e2,
-        'batch_size': 128,
-        'learning_rate': 1e-3,
-        'temperature': 1.0,
+        'env_id': "Pendulum-v1",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
+        'num_actions': 5e2,
+        'num_random_actions': 1e2,
+        'batch_size': 16,
+        'learning_rate': 3e-4,
+        'temperature': 0.2,
         'train_test_split': 0.8,
         'replay_buffer_size': 1e6,
         'parameter_update_interval': 50,

@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.distributions import Normal
 
 from nn_architecture.rl_networks import ValueNetwork, SoftQNetwork, PolicyNetwork, ValueRoboboboNetwork, \
@@ -222,15 +223,12 @@ class SACAgent(Agent):
         std = log_std.exp()
 
         # Generate random value for randomized action-selection
-        normal = Normal(0, 1)
-        z = normal.sample(std.shape).to(self.device)
+        normal = Normal(mean, std)
+        action = normal.rsample()
+        # z = normal.sample(std.shape).to(self.device)
 
         # Draw action by applying scaled tanh-function
-        action = mean + std * z
-        if self.action_limit_low is not None:
-            action = torch.clamp(action, min=self.action_limit_low)
-        if self.action_limit_high is not None:
-            action = torch.clamp(action, max=self.action_limit_high)
+        # action = mean + std * z
 
         # if hold:
         #     # if one action is smaller than the hold threshold, this action is set to 0
@@ -241,15 +239,29 @@ class SACAgent(Agent):
         #     action[action > 0] = self.env.action_space.softmax(action[action > 0])
 
         if log_prob:
-            log_prob = Normal(mean, std).log_prob(mean + std * z) - torch.log(1 - action.pow(2) + epsilon)
-            return mean, log_prob.mean(dim=-1).unsqueeze(dim=-1)  # TODO: check if mean is correct
+            log_prob = normal.log_prob(action).sum(axis=-1)
+            log_prob -= (2 * (np.log(2) - action - F.softplus(-2 * action))).sum(axis=1)
+            # log_prob = Normal(mean, std).log_prob(mean + std * z) - torch.log(1 - action.pow(2) + epsilon)
+            # log_prob = log_prob.mean(dim=-1).unsqueeze(dim=-1)  # TODO: check if mean is correct
         else:
-            return mean
+            log_prob = None
+
+        action = torch.tanh(action)
+
+        if self.action_limit_low is not None:
+            action = torch.clamp(action, min=self.action_limit_low)
+        if self.action_limit_high is not None:
+            action = torch.clamp(action, max=self.action_limit_high)
+
+        if log_prob is not None:
+            return action, log_prob
+        else:
+            return action
 
     def get_action_exploitation(self, state):
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
-        action = self.policy_net.forward(state)[0]
+        action = torch.tanh(self.policy_net.forward(state)[0])
         if self.action_limit_low is not None:
             action = torch.clamp(action, min=self.action_limit_low)
         if self.action_limit_high is not None:
@@ -268,47 +280,47 @@ class SACAgent(Agent):
         r1 = torch.from_numpy(r1).float().to(self.device)
         done = torch.from_numpy(done).float().to(self.device)
 
-        # Training Q Function
-        # Compute target Q-value by taking a1-dependent r1 into account
+        # ---------------------- optimize critic ----------------------------
         with torch.no_grad():
+            self.policy_net.eval()
+            for param in self.policy_net.parameters():
+                param.requires_grad = False
             a2_pred, a2_pred_log_prob = self.get_action_exploration(s2, log_prob=True)
             target_value = torch.min(self.target_q_net1(s2, a2_pred), self.target_q_net2(s2, a2_pred))
             target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.temperature * a2_pred_log_prob)
 
-        # check if q-net parameters require grad
-        for param in self.q_net1.parameters():
-            if not param.requires_grad:
-                print("Q-net1 parameters do not require grad")
-
-        for param in self.q_net2.parameters():
-            if not param.requires_grad:
-                print("Q-net2 parameters do not require grad")
-
         # Compute loss
         predicted_q_value1 = self.q_net1(s1, a1)
-        q_value_loss1 = self.q1_criterion(predicted_q_value1, target_q_value)
+        q_value_loss1 = ((predicted_q_value1 - target_q_value)**2).mean()#self.q1_criterion(predicted_q_value1, target_q_value)
         self.q1_optimizer.zero_grad()
         q_value_loss1.backward()
         self.q1_optimizer.step()
         predicted_q_value2 = self.q_net2(s1, a1)
-        q_value_loss2 = self.q2_criterion(predicted_q_value2, target_q_value)
+        q_value_loss2 = ((predicted_q_value2 - target_q_value)**2).mean()#self.q2_criterion(predicted_q_value2, target_q_value)
         self.q2_optimizer.zero_grad()
         q_value_loss2.backward()
         self.q2_optimizer.step()
 
+        self.policy_net.train()
+        for param in self.policy_net.parameters():
+            param.requires_grad = True
+
+        # ---------------------- optimize actor ----------------------------
         if update_actor:
             a1_pred, a1_pred_log_prob = self.get_action_exploration(s1, log_prob=True)
             # Get new predicted q value from updated q networks for coming updates
             # freeze q-networks
-            # for param in self.q_params:
-            #     param.requires_grad = False
             self.q_net1.eval()
             self.q_net2.eval()
+            for param in self.q_net1.parameters():
+                param.requires_grad = False
+            for param in self.q_net2.parameters():
+                param.requires_grad = False
             with torch.no_grad():
                 predicted_new_q_value = torch.min(self.q_net1(s1, a1_pred), self.q_net2(s1, a1_pred))
 
             # Training Policy Function
-            policy_loss = self.policy_criterion(a1_pred_log_prob*self.temperature, predicted_new_q_value)
+            policy_loss = (self.temperature*a1_pred_log_prob - predicted_new_q_value).mean()
             self.policy_optimizer.zero_grad()
             policy_loss.backward()
             self.policy_optimizer.step()
@@ -316,14 +328,14 @@ class SACAgent(Agent):
             # unfreeze q-networks
             # for param in self.q_params:
             #     param.requires_grad = True
+            self.q_net1.train()
+            self.q_net2.train()
             for param in self.q_net1.parameters():
                 param.requires_grad = True
             for param in self.q_net2.parameters():
                 param.requires_grad = True
-            self.q_net1.train()
-            self.q_net2.train()
 
-        # Update target networks by self.polyak-averaging
+        # Update target networks by polyak-averaging
         with torch.no_grad():
             for target_param, param in zip(self.target_q_net1.parameters(), self.q_net1.parameters()):
                 target_param.data.mul_(self.polyak)
