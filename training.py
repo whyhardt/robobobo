@@ -16,10 +16,17 @@ from utils.dataprocessor import DataProcessor
 from nn_architecture.agents import Agent
 
 
-def simple_train(env: gym.Env, agent: Agent,
-                 num_actions: int, batch_size: int, parameter_update_interval: int,
-                 num_random_actions=None, path_checkpoint=None, checkpoint_interval=100,
-                 render=True, time_limit=1e9):
+def simple_train(
+        env: gym.Env,
+        agent: Agent,
+        num_actions: int,
+        batch_size: int,
+        parameter_update_interval: int,
+        num_random_actions=None,
+        path_checkpoint=None,
+        checkpoint_interval=100,
+        render=True,
+        time_limit=1e9):
     """
     This method interacts with the environment and trains the agent in batches on past experience.
     The agent is provided as an instance of the Agent class.
@@ -46,7 +53,8 @@ def simple_train(env: gym.Env, agent: Agent,
                 action = env.action_space.sample()
             else:
                 # Draw greedy action
-                action = agent.get_action_exploration(torch.from_numpy(state).to(agent.device)).detach().cpu().numpy()
+                with torch.no_grad():
+                    action = agent.get_action_exploration(torch.from_numpy(state).to(agent.device)).cpu().numpy()
 
             # create figure to plot current state and update it continuously
             if render:
@@ -66,10 +74,11 @@ def simple_train(env: gym.Env, agent: Agent,
 
             # Update parameters each n steps
             if t % parameter_update_interval == 0 and len(agent.replay_buffer) > batch_size*10:
-                # and len(agent.replay_buffer) > num_random_actions \
                 for i in range(parameter_update_interval):
                     if i % agent.delay == 0:
                         update_actor = True
+                    else:
+                        update_actor = False
                     agent.update(batch_size, update_actor)
 
             episode_reward += reward
@@ -82,7 +91,7 @@ def simple_train(env: gym.Env, agent: Agent,
         print(f"Episode: {episode + 1} -- time steps: {t} -- reward: {np.round(episode_reward, 2)}")
         # total_equity_final.append(env.total_equity().item())
         episode += 1
-        episode_rewards.append(episode_reward)
+        episode_rewards.append(copy.deepcopy(episode_reward))
 
         # Save model for later use
         if path_checkpoint and episode % checkpoint_interval == 0:
@@ -104,7 +113,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         agent.train()
     state = env.reset()[0]
 
-    print(f"\nTest scenario (agent.train={agent.train}) started.")
+    print(f"\nTest scenario (agent.train={not test}) started.")
     while not done and not truncated:
         env.render()
         if test:
@@ -112,7 +121,7 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         else:
             action = agent.get_action_exploration(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
         state, reward, done, truncated, _ = env.step(action)
-        rewards.append(reward)
+        rewards.append(copy.deepcopy(reward))
     print(f"Test scenario terminated. Total reward: {np.round(np.sum(rewards), 2)}\n")
     env.close()
 

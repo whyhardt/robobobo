@@ -256,7 +256,7 @@ class SACAgent(Agent):
     def get_action_exploitation(self, state):
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
-        action, _ = self.policy_net.forward(state)[0]
+        action = self.policy_net.forward(state)[0]
         if self.action_limit_low is not None:
             action = torch.clamp(action, min=self.action_limit_low)
         if self.action_limit_high is not None:
@@ -275,39 +275,39 @@ class SACAgent(Agent):
         r1 = torch.from_numpy(r1).float().to(self.device)
         done = torch.from_numpy(done).float().to(self.device)
 
-        # Get all values, which are necessary for the network updates
-        a1_pred, a1_pred_log_prob = self.get_action_exploration(s1, log_prob=True)
-        a2_pred, a2_pred_log_prob = self.get_action_exploration(s2, log_prob=True)
-        predicted_q_value1 = self.q_net1(s1, a1)
-        predicted_q_value2 = self.q_net2(s1, a1)
-        # predicted_value = self.value_net(s1)
-
         # Training Q Function
         # Compute target Q-value by taking a1-dependent r1 into account
-        # target_value = self.target_value_net(s2)
-        target_value = torch.min(self.target_q_net1(s2, a2_pred).detach(), self.target_q_net2(s2, a2_pred).detach())
-        target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.temperature * a2_pred_log_prob)
+        with torch.no_grad():
+            a2_pred, a2_pred_log_prob = self.get_action_exploration(s2, log_prob=True)
+            target_value = torch.min(self.target_q_net1(s2, a2_pred), self.target_q_net2(s2, a2_pred))
+            target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.temperature * a2_pred_log_prob)
 
         # Compute loss
-        q_value_loss1 = self.q1_criterion(predicted_q_value1, target_q_value)
-        self.q1_optimizer.zero_grad()
-        q_value_loss1.backward()
-        self.q1_optimizer.step()
-
+        try:
+            predicted_q_value1 = self.q_net1(s1, a1)
+            q_value_loss1 = self.q1_criterion(predicted_q_value1, target_q_value)
+            self.q1_optimizer.zero_grad()
+            q_value_loss1.backward()
+            self.q1_optimizer.step()
+        except:
+            print("Error in q1 update")
+        predicted_q_value2 = self.q_net2(s1, a1)
         q_value_loss2 = self.q2_criterion(predicted_q_value2, target_q_value)
         self.q2_optimizer.zero_grad()
         q_value_loss2.backward()
         self.q2_optimizer.step()
 
         if update_actor:
+            a1_pred, a1_pred_log_prob = self.get_action_exploration(s1, log_prob=True)
             # Get new predicted q value from updated q networks for coming updates
             # freeze q-networks
             for param in self.q_params:
                 param.requires_grad = False
             self.q_net1.eval()
             self.q_net2.eval()
-            predicted_new_q_value = torch.min(self.q_net1(s1, a1_pred), self.q_net2(s1, a1_pred)).detach()
-            
+            with torch.no_grad():
+                predicted_new_q_value = torch.min(self.q_net1(s1, a1_pred), self.q_net2(s1, a1_pred))
+
             # Training Policy Function
             policy_loss = self.policy_criterion(a1_pred_log_prob*self.temperature, predicted_new_q_value)
             self.policy_optimizer.zero_grad()

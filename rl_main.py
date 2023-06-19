@@ -35,17 +35,17 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': False,
-        'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar2.pt'),
+        'file_checkpoint': os.path.join('trained_rl', 'td3_mountaincar_fixed.pt'),
         'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
         'train': True,
-        'agent': 'td3',
+        'agent': 'sac',
         'env_id': "MountainCarContinuous-v0",  # Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'num_actions': 2e3,
-        'num_random_actions': 1e3,
+        'num_actions': 2e2,
+        'num_random_actions': 1e1,
         'batch_size': 128,
         'learning_rate': 1e-3,
         'temperature': .2,
@@ -54,7 +54,6 @@ if __name__ == '__main__':
         'parameter_update_interval': 50,
         'polyak': 0.995,
         'gamma': 0.99,
-        ''
 
         # network parameters
         'hidden_dim': 128,
@@ -174,7 +173,7 @@ if __name__ == '__main__':
                          action_limit_low=env.action_space.low, action_limit_high=env.action_space.high,
                          polyak=cfg['polyak'], gamma=cfg['gamma'],)
     else:
-        raise NotImplementedError(f"Agent of type {cfg['agent']} is not implemented.")
+        raise NotImplementedError(f"Agent of type {cfg['agent']} is not implemented.\nUse one of these: {list_valid_agents}")
 
     # if isinstance(agent, RoboBoboDDPG) or isinstance(agent, RoboBoboSAC):
     #     # create policy sub networks based on the data_processor predictor outputs
@@ -223,9 +222,12 @@ if __name__ == '__main__':
         plt.legend()
         plt.show()
 
+        print('Training done!')
+
     # test trained agent on test data
     print('Testing agent on test data')
     # env_test = Environment(test_dl.dataset.data.squeeze(0).numpy(), cash=cfg['cash_init'], observation_length=cfg['observation_length'], commission=cfg['commission'])
     # simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=True, plot=True, plot_reference=False)
     print(f"number actions: {agent.num_actions}")
+    simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=True, plot=True, plot_reference=False)
     simple_test(gym.make(cfg['env_id'], render_mode="human"), agent, test=False, plot=True, plot_reference=False)
