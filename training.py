@@ -62,7 +62,7 @@ def simple_train(
 
             # Give chosen action to environment to adjust internal parameters and to compute new state
             next_state, reward, done, truncated, _ = env.step(action)
-            reward = copy.deepcopy(next_state[0])*1e-2
+            reward = copy.deepcopy(next_state[0]) + 1
             
             # Append experience to replay buffer
             agent.replay_buffer.push(copy.deepcopy(state.reshape(1, -1)),
