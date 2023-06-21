@@ -84,7 +84,7 @@ class NormalDistributionActionNoise:
 
     def sample(self):
         # return torch.clip(np.random.normal(self.mu, self.sigma, self.action_dim), -self.clip, self.clip)
-        return torch.clip(self.dist.sample(), -self.clip, self.clip)
+        return torch.clip(self.dist.rsample(), -self.clip, self.clip)
 
 
 class Agent:
