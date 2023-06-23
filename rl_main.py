@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
         # training parameters
         'train': True,
-        'agent': 'ppo',
+        'agent': 'sac',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 1e1,
         'num_actions_per_epoch': 1e2,
@@ -73,16 +73,22 @@ if __name__ == '__main__':
 
     list_valid_agents = ['sac', 'ddpg', 'td3', 'ppo']
     assert cfg['agent'] in list_valid_agents, f"Agent must be one of: {list_valid_agents}"
+    # agent_dict structure:
+    # key: agent name
+    # value: (agent constructor, agent load function, bool: does agent support discrete actions?)
     agent_dict = {'sac': (lambda policy, env: SAC(policy, env, verbose=1),
-                          lambda path: SAC.load(path)),
+                          lambda path: SAC.load(path),
+                          False),
                   'ddpg': (lambda policy, env: DDPG(policy, env, verbose=1),
-                           lambda path: DDPG.load(path)),
+                           lambda path: DDPG.load(path),
+                           False),
                   'td3': (lambda policy, env: TD3(policy, env, verbose=1),
-                          lambda path: TD3.load(path)),
+                          lambda path: TD3.load(path),
+                          False),
                   'ppo': (lambda policy, env: PPO(policy, env, verbose=1),
-                          lambda path: PPO.load(path)),
+                          lambda path: PPO.load(path),
+                          True),
                     }
-
 
     print('Initializing framework...')
 
@@ -93,7 +99,7 @@ if __name__ == '__main__':
 
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'])
+        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2])
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")
@@ -143,7 +149,7 @@ if __name__ == '__main__':
     # --------------------------------------------
     # test RL framework
     # --------------------------------------------
-    env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,)
+    env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1, discrete_actions=agent_dict[cfg['agent']][2])
     # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
     # print(f"Test reward: {rewards[0]} +/- {std[0]}")
     # plt.figure()

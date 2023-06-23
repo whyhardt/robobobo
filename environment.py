@@ -51,8 +51,8 @@ class Environment(gym.Env):
         self._cash_init = cash
         self._discrete_actions = discrete_actions
 
-        # mapping from binary action ([0,1]) to real action ([-1,1])
-        # easier switch between discrete and continuous action space
+        # mapping from binary action space ([0,1]) to real action space ([-1,1])
+        # easier to switch between discrete and continuous action space
         self._transform_discrete_action = {
             0: -1,
             1: 1,
@@ -61,51 +61,19 @@ class Environment(gym.Env):
     def step(self, action: np.ndarray):
         # TODO:
         #   - implement buy and sell procedure for continuous action space
-        #   - For continuous action space: check if buy orders + (1+commission) <= cash and compute softmax if necessary
+        #   - For continuous action space: check if buy orders * (1+commission) <= cash and compute softmax if necessary
         #   - For continuous action space: check if sell orders * commission <= cash
 
         if self._discrete_actions:
             action = np.array([self._transform_discrete_action[a] for a in action])
-        else:
-            raise NotImplementedError("Continuous actions are not implemented yet.")
 
         self.t += 1
 
         self._cash_t_1 = self.total_equity()
         self._portfolio_t_1 = deepcopy(self.portfolio)
 
-        # separate sell and buy orders - each stock is either sell, hold or buy
-        index_sell = (action < 0)*(self.stock_data[self.t] > 0)
-        index_buy = (action > 0)*(self.stock_data[self.t] > 0)
-        sell_orders = action[index_sell]
-        buy_orders = action[index_buy]
-
-        # ---------------- process sell orders ----------------
-
-        sell_amounts = self.portfolio[index_sell] * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
-        if np.sum(sell_amounts*self._commission_sell) > self.cash:
-            # reduce sell_amounts if not enough cash for all sell orders
-            sell_amounts *=  self.cash/np.sum((sell_amounts+1)*self._commission_sell)
-            sell_amounts = np.clip(sell_amounts, 0, None)
-        # update cash and portfolio after sell orders
-        if self.cash >= np.sum(sell_amounts*self._commission_sell):
-            # Update cash: sum of all sells - percentual commission for each sell
-            self.cash += np.sum(sell_amounts) - np.sum(sell_amounts * self._commission_sell)
-            # update portfolio after sell orders
-            self.portfolio[index_sell] -= sell_amounts / self.stock_data[self.t, index_sell]  # Unit check: [$ / ($/share) = share]
-        else:
-            print('not enough cash to sell anymore')
-
-        # ---------------- process buy orders ----------------
-        buy_amounts = buy_orders * self.cash/np.sum(buy_orders)
-        buy_amounts -= buy_amounts*self._commission_buy
-        buy_amounts = np.clip(buy_amounts, 0, None)
-        # reserve some cash for later sell orders
-        buy_amounts -= self._commission_sell * buy_amounts
-        # update cash and portfolio after buy orders
-        if self.cash >= np.sum(buy_amounts):
-            self.cash -= np.sum(buy_amounts) - np.sum(buy_amounts*self._commission_buy)
-            self.portfolio[index_buy] += buy_amounts / self.stock_data[self.t, index_buy]  # Unit check: [$ / ($/share) = share]
+        self._sell(action)
+        self._buy(action)
 
         if np.isnan(self.portfolio).any():
             print('nan in portfolio')
@@ -119,6 +87,43 @@ class Environment(gym.Env):
         #     done = False
 
         return self._get_obs(), self.reward(reward_scaling=True), self._done(), {}
+
+    def _buy(self, action):
+        index_buy = (action > 0) * (self.stock_data[self.t] > 0)
+        buy_orders = action[index_buy]
+
+        # check if buy orders <= cash (sum of buy orders surpasses 1) and compute softmax if necessary
+        if np.sum(buy_orders) > 1:
+            # rescale buy_orders if not enough cash with a softmax function
+            buy_orders = np.exp(buy_orders)/np.sum(np.exp(buy_orders))
+        buy_amounts = buy_orders * self.cash
+        buy_amounts -= buy_amounts*self._commission_buy
+        # reserve some cash for later sell orders
+        buy_amounts -= self._commission_sell * buy_amounts
+        buy_amounts = np.clip(buy_amounts, 0, None)
+        # update cash and portfolio after buy orders
+        if self.cash >= np.sum(buy_amounts):
+            self.cash -= np.sum(buy_amounts) - np.sum(buy_amounts*self._commission_buy)
+            self.portfolio[index_buy] += buy_amounts / self.stock_data[self.t, index_buy]  # Unit check: [$ / ($/share) = share]
+
+    def _sell(self, action):
+        index_sell = (action < 0) * (self.stock_data[self.t] > 0)
+        sell_orders = -action[index_sell]  # from negative sign (as actions are defined) to positive sign
+
+        sell_amounts_share = self.portfolio[index_sell] * sell_orders  # Unit check: [share * unit_less_fraction = share]
+        sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
+        if np.sum(sell_amounts * self._commission_sell) > self.cash:
+            # reduce sell_amounts if not enough cash for all sell orders
+            sell_amounts *= self.cash / np.sum((sell_amounts + 1) * self._commission_sell)
+            sell_amounts = np.clip(sell_amounts, 0, None)
+        # update cash and portfolio after sell orders
+        if self.cash >= np.sum(sell_amounts * self._commission_sell):
+            # Update cash: sum of all sells - percentual commission for each sell
+            self.cash += np.sum(sell_amounts) - np.sum(sell_amounts * self._commission_sell)
+            # update portfolio after sell orders
+            self.portfolio[index_sell] -= sell_amounts_share  # Unit check: [$ / ($/share) = share]
+        else:
+            print('not enough cash to sell anymore')
 
     def _done(self):
         time_limit_reached = self.t == len(self.stock_data) - 1
