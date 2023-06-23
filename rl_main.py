@@ -13,10 +13,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-
-import torch
 from matplotlib import pyplot as plt
-from torch import nn
 
 from stable_baselines3 import PPO, SAC, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -26,7 +23,7 @@ from utils.ae_dataloader import create_dataloader
 from training import simple_train, simple_test
 from environment import Environment
 
-import gymnasium as gym
+import gym
 from gymnasium.wrappers import TimeLimit
 
 
