@@ -117,51 +117,64 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, test=True, plot=True, plot_r
     rewards = []
     actions = []
     portfolio = []
-    # if test:
-    #     agent.eval()
-    # else:
-    #     agent.train()
     state = env.reset()
 
     print(f"\nTest scenario (agent.train={not test}) started.")
     while not done and not truncated:
+        print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
         action = agent.predict(state.reshape(1, -1), deterministic=test)[0]
         state, _, done, _ = env.step(action)
         rewards.append(copy.deepcopy(env.total_equity().item()))
-        actions.append(copy.deepcopy(action[0]))
-        portfolio.append(copy.deepcopy(env.portfolio[0]))
+        actions.append(copy.deepcopy(action))
+        portfolio.append(copy.deepcopy(env.portfolio))
     print(f"Test scenario terminated. Total reward: {np.round(np.sum(np.diff(rewards)), 2)}\n")
     env.close()
 
-    # print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
+    actions = np.array(actions)
+    actions_mean = np.mean(actions, axis=1)
+    actions_std = np.std(actions, axis=1)
+    portfolio = np.array(portfolio)
+    portfolio_mean = np.mean(portfolio, axis=1)
+    portfolio_std = np.std(portfolio, axis=1)
 
     if plot:
-        # fig, axs = plt.subplots(4, 1, sharex=True)
+        fig, axs = plt.subplots(4, 1, sharex=True)
 
-        plt.plot(rewards, label='total equity')
-        plt.plot(np.convolve(rewards, np.ones(10) / 10, mode='valid'), label='total equity (smoothed)')
-        plt.ylabel('total equity')
-        plt.xlabel('time steps')
-        plt.title("total equity of test")
-        plt.legend()
+        # plot the average of all stock prices
+        avg = np.mean(env.stock_data, axis=1)
+        axs[0].plot(avg)
+        axs[0].set_ylabel('avg price')
+        # axs[0].xlabel('Time step')
+        # axs[0].title(f"Avg stock price in [$] (Grow: {avg[-1] / avg[0]:.2f})")
+        # axs[0].show()
+
+        axs[1].plot(rewards, label='total equity')
+        axs[1].plot(np.convolve(rewards, np.ones(10) / 10, mode='valid'), label='total equity (smoothed)')
+        axs[1].set_ylabel('total equity')
+        # axs[1].xlabel('time steps')
+        # axs[1].title("total equity of test")
+        # axs[1].legend()
+        # axs[1].show()
+
+        axs[2].plot(actions_mean, label='actions')
+        axs[2].fill_between(np.arange(len(actions_mean)), actions_mean-actions_std, actions_mean+actions_std, alpha=0.2)
+        # axs[2].plot(np.convolve(np.mean(actions, axis=1), np.ones(10) / 10, mode='valid'), label='actions (smoothed)')
+        axs[2].set_ylabel('actions')
+        # axs[2].xlabel('time steps')
+        # axs[2].title("actions of test")
+        # axs[2].legend()
+        # axs[2].show()
+
+        axs[3].plot(np.mean(portfolio, axis=1), label='portfolio')
+        axs[3].fill_between(np.arange(len(portfolio_mean)), portfolio_mean-portfolio_std, portfolio_mean+portfolio_std, alpha=0.2)
+        # axs[3].plot(np.convolve(np.mean(portfolio, axis=1), np.ones(10) / 10, mode='valid'), label='portfolio (smoothed)')
+        axs[3].set_ylabel('portfolio')
+        axs[3].set_xlabel('time steps (days)')
+        # axs[3].title("portfolio of test")
+        # axs[3].legend()
+        # axs[3].show()
+
         plt.show()
-
-        plt.plot(actions, label='actions')
-        plt.plot(np.convolve(actions, np.ones(10) / 10, mode='valid'), label='actions (smoothed)')
-        plt.ylabel('actions')
-        plt.xlabel('time steps')
-        plt.title("actions of test")
-        plt.legend()
-        plt.show()
-
-        plt.plot(portfolio, label='portfolio')
-        plt.plot(np.convolve(portfolio, np.ones(10) / 10, mode='valid'), label='portfolio (smoothed)')
-        plt.ylabel('portfolio')
-        plt.xlabel('time steps')
-        plt.title("portfolio of test")
-        plt.legend()
-        plt.show()
-
         # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
         # axs[0].plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
 
@@ -178,14 +191,17 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, test=True, plot=True, plot_r
         # visualize_actions(np.array(actions), cmap=None, min=-1, max=1, title='actions over time')
         # visualize_actions(np.array(portfolio), cmap=None, title='portfolio over time')
 
-    if plot_reference:
-        # plot the average of all stock prices
-        avg = np.mean(env.stock_data, axis=1)
-        plt.plot(avg)
-        plt.ylabel('Average stock price [$]')
-        plt.xlabel('Time step')
-        plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
-        plt.show()
+        visualize_actions(actions, min=-1, max=1, title='actions over time')
+        visualize_actions(portfolio, title='portfolio over time')
+
+    # if plot_reference:
+    #     # plot the average of all stock prices
+    #     avg = np.mean(env.stock_data, axis=1)
+    #     plt.plot(avg)
+    #     plt.ylabel('Average stock price [$]')
+    #     plt.xlabel('Time step')
+    #     plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
+    #     plt.show()
 
 
 def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
@@ -223,12 +239,12 @@ def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
         plt.show()
 
     # Plot the mean value with a solid line
-    plt.plot(mean_values, color='black', label='Mean')
+    # plt.plot(mean_values, color='black', label='Mean')
 
     # Plot the standard deviation band
-    plt.fill_between(range(len(std_values)), mean_values + std_values, mean_values - std_values,
-                       color='gray', alpha=0.3, label='Standard Deviation')
+    # plt.fill_between(range(len(std_values)), mean_values + std_values, mean_values - std_values,
+    #                    color='gray', alpha=0.3, label='Standard Deviation')
 
-    plt.xlabel('Time Step')
-    plt.legend()
-    plt.show()
+    # plt.xlabel('Time Step')
+    # plt.legend()
+    # plt.show()
