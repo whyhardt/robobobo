@@ -17,6 +17,7 @@ from matplotlib import pyplot as plt
 
 from stable_baselines3 import PPO, SAC, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.env_checker import check_env
 
 # from nn_architecture.agents import SACAgent, DDPGAgent, TD3Agent
 from utils.ae_dataloader import create_dataloader
@@ -34,14 +35,14 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
+        'load_checkpoint': False,
         'file_checkpoint': 'trained_rl/ppo_Custom_20230623-132050.zip',
         'file_data': os.path.join('stock_data', 'stocks_sp20_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': False,
+        'train': True,
         'agent': 'ppo',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 5,
@@ -101,6 +102,8 @@ if __name__ == '__main__':
     if cfg['env_id'] == 'Custom':
         env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2])
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
+        # It will check your custom environment and output additional warnings if needed
+        check_env(env)
     else:
         env = gym.make(cfg['env_id'], render_mode="human")
 

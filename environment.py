@@ -59,11 +59,6 @@ class Environment(gym.Env):
         }
 
     def step(self, action: np.ndarray):
-        # TODO:
-        #   - implement buy and sell procedure for continuous action space
-        #   - For continuous action space: check if buy orders * (1+commission) <= cash and compute softmax if necessary
-        #   - For continuous action space: check if sell orders * commission <= cash
-
         if self._discrete_actions:
             action = np.array([self._transform_discrete_action[a] for a in action])
 
@@ -86,7 +81,7 @@ class Environment(gym.Env):
         # else:
         #     done = False
 
-        return self._get_obs(), self.reward(reward_scaling=True), self._done(), {}
+        return self._get_obs(), self.reward(reward_scaling=True), self._terminated(), self._truncated(), {}
 
     def _buy(self, action):
         index_buy = (action > 0) * (self.stock_data[self.t] > 0)
@@ -125,12 +120,13 @@ class Environment(gym.Env):
         else:
             print('not enough cash to sell anymore')
 
-    def _done(self):
-        time_limit_reached = self.t == len(self.stock_data) - 1
+    def _terminated(self):
         total_equity_low = self.total_equity().item() <= 0.001*self._cash_init
-        cash_low = self.cash <= 0.0001*self._cash_init
-        # return self.t == len(self.stock_data)-1 or (self.total_equity().item() <= 0.001*self._cash_init) or self.cash <= 0.0001*self._cash_init
-        return time_limit_reached or total_equity_low or cash_low
+        cash_low = self.cash <= 0.001*self._cash_init
+        return bool(total_equity_low or cash_low)
+
+    def _truncated(self):
+        return self.t == len(self.stock_data) - 1
 
     def _get_obs(self):
         cash = deepcopy(np.array([self.cash/self._cash_init]))
@@ -140,7 +136,7 @@ class Environment(gym.Env):
         stock_prices /= np.max(np.abs(stock_prices))
         stock_prices[np.isnan(stock_prices)] = 0
         stock_prices = np.reshape(stock_prices, (-1,))
-        return np.concatenate((cash, portfolio, stock_prices))
+        return np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
 
     def reward(self, reward_scaling=False):
         # Calculate reward for the current action
@@ -149,7 +145,7 @@ class Environment(gym.Env):
             r *= self._reward_scaling
         return r
 
-    def reset(self):
+    def reset(self, **kwargs):
         self.cash = self._cash_init
         self.t = self.observation_length
         self.portfolio = np.zeros((self.stock_data.shape[1],))
@@ -163,7 +159,7 @@ class Environment(gym.Env):
             self.stock_data = deepcopy(self._dataset[start:end])
         else:
             self.stock_data = deepcopy(self._dataset)
-        return self._get_obs()
+        return self._get_obs(), {}
 
     def render(self):
         # Render the environment to the screen

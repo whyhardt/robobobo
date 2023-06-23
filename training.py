@@ -117,13 +117,13 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
     rewards = []
     actions = []
     portfolio = []
-    state = env.reset()
+    state = env.reset()[0]
 
     print(f"\nTest scenario (deterministic={deterministic}) started.")
     while not done and not truncated:
         print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
-        action = agent.predict(state.reshape(1, -1), deterministic=deterministic)[0]
-        state, _, done, _ = env.step(action)
+        action = agent.predict(state, deterministic=deterministic)[0]
+        state, _, done, truncated, _ = env.step(action)
         rewards.append(copy.deepcopy(env.total_equity().item()))
         actions.append(copy.deepcopy(action))
         portfolio.append(copy.deepcopy(env.portfolio))
