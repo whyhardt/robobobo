@@ -130,7 +130,7 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, test=True, plot=True, plot_r
         rewards.append(copy.deepcopy(env.total_equity().item()))
         actions.append(copy.deepcopy(action[0]))
         portfolio.append(copy.deepcopy(env.portfolio[0]))
-    print(f"Test scenario terminated. Total reward: {np.round(np.sum(rewards), 2)}\n")
+    print(f"Test scenario terminated. Total reward: {np.round(np.sum(np.diff(rewards)), 2)}\n")
     env.close()
 
     # print("Test scenario -- final total equity: {}".format(env.total_equity().item()))
