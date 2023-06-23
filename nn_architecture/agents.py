@@ -92,6 +92,7 @@ class Agent:
     replay_buffer = ReplayBuffer()
     num_actions = 0
     delay = 1
+    logger = {}
 
     def __init__(self):
         pass
@@ -126,10 +127,18 @@ class SACAgent(Agent):
     training = False
     policy_state = torch.Tensor
 
-    def __init__(self, 
-                 temperature=1., 
-                 state_dim=None, 
-                 action_dim=None, 
+    # for logging
+    logger = {
+        'alphas': [],
+        'q_values': [],
+        'means': [],
+        'log_probs': [],
+    }
+
+    def __init__(self,
+                 state_dim,
+                 action_dim,
+                 temperature=None,
                  hidden_dim=256, 
                  num_layers=3,
                  learning_rate=1e-4, 
@@ -148,8 +157,6 @@ class SACAgent(Agent):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.temperature = temperature
-
         # self.env = NormalizedActions(env)
         self.action_dim = action_dim
         self.state_dim = state_dim
@@ -158,6 +165,7 @@ class SACAgent(Agent):
         self.action_limit_low = torch.tensor(action_limit_low).to(self.device)
         self.polyak = polyak
         self.gamma = gamma
+        self.temperature = temperature
 
         # initialize SAC networks
         self.q_net1 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
@@ -166,9 +174,7 @@ class SACAgent(Agent):
                                           num_layers=num_layers, init_w=init_w, dropout=dropout).to(self.device)
         for target_param, param in zip(self.target_q_net1.parameters(), self.q_net1.parameters()):
             target_param.data.copy_(param.data)
-        # freeze target network and only update via self.polyak averaging
-        for param in self.target_q_net1.parameters():
-            param.requires_grad = False
+            target_param.requires_grad = False
         self.target_q_net1.eval()
 
         self.q_net2 = SoftQNetwork(self.state_dim, self.action_dim, self.hidden_dim,
@@ -177,13 +183,15 @@ class SACAgent(Agent):
                                           num_layers=num_layers, init_w=init_w, dropout=dropout).to(self.device)
         for target_param, param in zip(self.target_q_net2.parameters(), self.q_net2.parameters()):
             target_param.data.copy_(param.data)
-        # freeze target network and only update via self.polyak averaging
-        for param in self.target_q_net2.parameters():
-            param.requires_grad = False
+            target_param.requires_grad = False
         self.target_q_net2.eval()
 
-        # save q-network parameters for easy access
-        # self.q_params = itertools.chain(self.q_net1.parameters(), self.q_net2.parameters())
+        if not temperature:
+            self.target_entropy = -torch.prod(torch.Tensor(self.action_dim).to(self.device)).item()
+            # We optimize log(alpha), instead of alpha.
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
+        else:
+            self.log_alpha = None
 
         self.policy_net = SoftPolicyNetwork(num_inputs=self.state_dim, num_actions=self.action_dim,
                                             hidden_dim=self.hidden_dim, num_layers=num_layers, dropout=dropout,
@@ -191,9 +199,9 @@ class SACAgent(Agent):
 
         # Initializes the networks' cost-function, optimizer and learning rates
         # self.value_criterion = nn.MSELoss()
-        self.q1_criterion = nn.MSELoss()
-        self.q2_criterion = nn.MSELoss()
-        self.policy_criterion = nn.L1Loss()
+        # self.q1_criterion = nn.MSELoss()
+        # self.q2_criterion = nn.MSELoss()
+        # self.policy_criterion = nn.L1Loss()
 
         # self.value_lr = learning_rate
         self.q_lr = learning_rate
@@ -203,6 +211,7 @@ class SACAgent(Agent):
         self.q1_optimizer = optim.Adam(self.q_net1.parameters(), lr=self.q_lr)
         self.q2_optimizer = optim.Adam(self.q_net2.parameters(), lr=self.q_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=self.policy_lr)
+        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=learning_rate)
 
         # Initializes the replay buffer within the agent
         self.replay_buffer_size = replay_buffer_size
@@ -213,6 +222,13 @@ class SACAgent(Agent):
 
         self.num_actions = 0
         self.obs_dims = []  # for self.state_tensor_to_list; will be written at first use of self.state_list_to_tensor
+
+    @property
+    def alpha(self):
+        if self.log_alpha is None:
+            return self.temperature
+        else:
+            return self.log_alpha.exp()
 
     def get_action_exploration(self, state, log_prob=False, epsilon=1e-6):
         """Is used to compute an action during experience gathering and testing"""
@@ -248,6 +264,8 @@ class SACAgent(Agent):
             log_prob = None
 
         action = torch.tanh(action)
+        if self.action_limit_high == self.action_limit_low:
+            action *= self.action_limit_high
 
         if self.action_limit_low is not None:
             action = torch.clamp(action, min=self.action_limit_low)
@@ -263,6 +281,8 @@ class SACAgent(Agent):
         if self.policy_state.__name__ == list.__name__ and not isinstance(state, self.policy_state):
             state = self.state_tensor_to_list(state)
         action = torch.tanh(self.policy_net.forward(state)[0])
+        if self.action_limit_high == self.action_limit_low:
+            action *= self.action_limit_high
         if self.action_limit_low is not None:
             action = torch.clamp(action, min=self.action_limit_low)
         if self.action_limit_high is not None:
@@ -282,13 +302,11 @@ class SACAgent(Agent):
         done = torch.from_numpy(done).float().to(self.device)
 
         # ---------------------- optimize critic ----------------------------
+        self.policy_net.eval()
         with torch.no_grad():
-            self.policy_net.eval()
-            for param in self.policy_net.parameters():
-                param.requires_grad = False
             a2_pred, a2_pred_log_prob = self.get_action_exploration(s2, log_prob=True)
             target_value = torch.min(self.target_q_net1(s2, a2_pred), self.target_q_net2(s2, a2_pred))
-            target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.temperature * a2_pred_log_prob)
+            target_q_value = r1 + (1 - done) * self.gamma * (target_value - self.alpha * a2_pred_log_prob)
 
         # Compute loss
         predicted_q_value1 = self.q_net1(s1, a1)
@@ -303,38 +321,27 @@ class SACAgent(Agent):
         self.q2_optimizer.step()
 
         self.policy_net.train()
-        for param in self.policy_net.parameters():
-            param.requires_grad = True
+        # for param in self.policy_net.parameters():
+        #     param.requires_grad = True
 
         # ---------------------- optimize actor ----------------------------
         if update_actor:
             a1_pred, a1_pred_log_prob = self.get_action_exploration(s1, log_prob=True)
             # Get new predicted q value from updated q networks for coming updates
-            # freeze q-networks
             self.q_net1.eval()
             self.q_net2.eval()
-            for param in self.q_net1.parameters():
-                param.requires_grad = False
-            for param in self.q_net2.parameters():
-                param.requires_grad = False
             with torch.no_grad():
                 predicted_new_q_value = torch.min(self.q_net1(s1, a1_pred), self.q_net2(s1, a1_pred))
 
             # Training Policy Function
-            policy_loss = (self.temperature*a1_pred_log_prob - predicted_new_q_value).mean()
+            policy_loss = (self.alpha * a1_pred_log_prob - predicted_new_q_value).mean()
+            # policy_loss = torch.mean(-self.alpha * entropy - q)
             self.policy_optimizer.zero_grad()
             policy_loss.backward()
             self.policy_optimizer.step()
 
-            # unfreeze q-networks
-            # for param in self.q_params:
-            #     param.requires_grad = True
             self.q_net1.train()
             self.q_net2.train()
-            for param in self.q_net1.parameters():
-                param.requires_grad = True
-            for param in self.q_net2.parameters():
-                param.requires_grad = True
 
         # Update target networks by polyak-averaging
         with torch.no_grad():
@@ -358,10 +365,13 @@ class SACAgent(Agent):
             'soft_q_optimizer1': self.q1_optimizer.state_dict(),
             'soft_q_optimizer2': self.q2_optimizer.state_dict(),
             'temperature': self.temperature,
+            'log_alpha': self.log_alpha,
+            'alpha_optimizer': self.alpha_optimizer.state_dict(),
             'action_dim': self.action_dim,
             'state_dim': self.state_dim,
             'hidden_dim': self.hidden_dim,
             'num_actions': self.num_actions,
+            'logger': self.logger,
             # 'reward': reward,
         }
 
@@ -378,8 +388,11 @@ class SACAgent(Agent):
         # self.value_optimizer.load_state_dict(sac_dict['value_optimizer'])
         self.q1_optimizer.load_state_dict(sac_dict['soft_q_optimizer1'])
         self.q2_optimizer.load_state_dict(sac_dict['soft_q_optimizer2'])
+        self.log_alpha = sac_dict['log_alpha']
+        self.alpha_optimizer.load_state_dict(sac_dict['alpha_optimizer'])
         self.temperature = sac_dict['temperature']
         self.num_actions = sac_dict['num_actions']
+        self.logger = sac_dict['logger']
         print("Loaded checkpoint from path: {}".format(path))
 
     def train(self):

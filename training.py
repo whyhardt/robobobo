@@ -10,6 +10,7 @@ import matplotlib as mpl
 import torch
 
 import gymnasium as gym
+from stable_baselines3.common.base_class import BaseAlgorithm
 
 from environment import Environment
 from utils.dataprocessor import DataProcessor
@@ -18,7 +19,7 @@ from nn_architecture.agents import Agent
 
 def simple_train(
         env: gym.Env,
-        agent: Agent,
+        agent: BaseAlgorithm,
         num_actions: int,
         batch_size: int,
         parameter_update_interval: int,
@@ -56,13 +57,20 @@ def simple_train(
                 with torch.no_grad():
                     action = agent.get_action_exploration(torch.from_numpy(state).to(agent.device)).cpu().numpy()
 
+            # log AC
+            with torch.no_grad():
+                agent.logger['means'].append(agent.get_action_exploitation(torch.from_numpy(state).to(agent.device)).cpu().item())
+                agent.logger['log_probs'].append(agent.get_action_exploration(torch.from_numpy(state).unsqueeze(0).to(agent.device), log_prob=True)[-1].cpu().item())
+                agent.logger['q_values'].append(np.min([agent.q_net1(torch.from_numpy(state).unsqueeze(0).to(agent.device), torch.from_numpy(action).unsqueeze(0).to(agent.device)).cpu().item(), agent.q_net2(torch.from_numpy(state).unsqueeze(0).to(agent.device), torch.from_numpy(action).unsqueeze(0).to(agent.device)).cpu().item()]))
+                agent.logger['alphas'].append(agent.alpha.cpu().item())
+
             # create figure to plot current state and update it continuously
             if render:
                 env.render()
 
             # Give chosen action to environment to adjust internal parameters and to compute new state
             next_state, reward, done, truncated, _ = env.step(action)
-            reward = copy.deepcopy(next_state[0]) + 1
+            reward = copy.deepcopy(next_state[0])
             
             # Append experience to replay buffer
             agent.replay_buffer.push(copy.deepcopy(state.reshape(1, -1)),
@@ -102,29 +110,26 @@ def simple_train(
     return np.array(episode_rewards, dtype=np.float32), agent
 
 
-def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference=False):
+def simple_test(env: gym.Env, agent: BaseAlgorithm, test=True, plot=True, plot_reference=False):
     """Test trained SAC agent"""
-    cpu_device = torch.device('cpu')
     done = False
     truncated = False
     rewards = []
     actions = []
-    if test:
-        agent.eval()
-    else:
-        agent.train()
-    state = env.reset()[0]
+    portfolio = []
+    # if test:
+    #     agent.eval()
+    # else:
+    #     agent.train()
+    state = env.reset()
 
     print(f"\nTest scenario (agent.train={not test}) started.")
     while not done and not truncated:
-        env.render()
-        if test:
-            action = agent.get_action_exploitation(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
-        else:
-            action = agent.get_action_exploration(torch.from_numpy(state).float().to(agent.device)).detach().cpu().numpy().reshape(-1,)
-        state, reward, done, truncated, _ = env.step(action)
-        rewards.append(copy.deepcopy(reward))
+        action = agent.predict(state.reshape(1, -1), deterministic=test)[0]
+        state, _, done, _ = env.step(action)
+        rewards.append(copy.deepcopy(env.total_equity().item()))
         actions.append(copy.deepcopy(action[0]))
+        portfolio.append(copy.deepcopy(env.portfolio[0]))
     print(f"Test scenario terminated. Total reward: {np.round(np.sum(rewards), 2)}\n")
     env.close()
 
@@ -133,13 +138,30 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
     if plot:
         # fig, axs = plt.subplots(4, 1, sharex=True)
 
-        plt.plot(rewards, label='reward')
-        plt.plot(np.convolve(rewards, np.ones(10) / 10, mode='valid'), label='reward (smoothed)')
-        plt.ylabel('reward')
+        plt.plot(rewards, label='total equity')
+        plt.plot(np.convolve(rewards, np.ones(10) / 10, mode='valid'), label='total equity (smoothed)')
+        plt.ylabel('total equity')
         plt.xlabel('time steps')
-        plt.title("rewards of test")
+        plt.title("total equity of test")
         plt.legend()
         plt.show()
+
+        plt.plot(actions, label='actions')
+        plt.plot(np.convolve(actions, np.ones(10) / 10, mode='valid'), label='actions (smoothed)')
+        plt.ylabel('actions')
+        plt.xlabel('time steps')
+        plt.title("actions of test")
+        plt.legend()
+        plt.show()
+
+        plt.plot(portfolio, label='portfolio')
+        plt.plot(np.convolve(portfolio, np.ones(10) / 10, mode='valid'), label='portfolio (smoothed)')
+        plt.ylabel('portfolio')
+        plt.xlabel('time steps')
+        plt.title("portfolio of test")
+        plt.legend()
+        plt.show()
+
         # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
         # axs[0].plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
 
@@ -153,27 +175,17 @@ def simple_test(env: gym.Env, agent: Agent, test=True, plot=True, plot_reference
         # axs[3].set_ylabel('Actions')
         # axs[3].set_xlabel('Time steps')
 
-
-
         # visualize_actions(np.array(actions), cmap=None, min=-1, max=1, title='actions over time')
         # visualize_actions(np.array(portfolio), cmap=None, title='portfolio over time')
 
-        plt.plot(actions, label='actions')
-        plt.plot(np.convolve(actions, np.ones(10) / 10, mode='valid'), label='actions (smoothed)')
-        plt.ylabel('actions')
-        plt.xlabel('time steps')
-        plt.title("actions of test")
-        plt.legend()
+    if plot_reference:
+        # plot the average of all stock prices
+        avg = np.mean(env.stock_data, axis=1)
+        plt.plot(avg)
+        plt.ylabel('Average stock price [$]')
+        plt.xlabel('Time step')
+        plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
         plt.show()
-
-    # if plot_reference:
-    #     # plot the average of all stock prices
-    #     avg = np.mean(env.stock_data, axis=1)
-    #     plt.plot(avg)
-    #     plt.ylabel('Average stock price [$]')
-    #     plt.xlabel('Time step')
-    #     plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
-    #     plt.show()
 
 
 def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):

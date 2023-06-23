@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     # create the model
     if cfg["model"]["input_dim"] is None:
-        cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[2]
+        cfg["model"]["input_dim"] = train_dataloader._dataset.data.shape[2]
     model = LSTMAutoencoder(**cfg["model"])
 
     # create the optimizer and criterion
@@ -91,9 +91,9 @@ if __name__ == '__main__':
             for i in indices:
                 optimizer.zero_grad()
                 # inputs = batch.float()
-                inputs = train_dataloader.dataset.data[indices[i]*train_dataloader.batch_size:indices[i]*train_dataloader.batch_size+train_dataloader.batch_size].float()
+                inputs = train_dataloader._dataset.data[indices[i] * train_dataloader.batch_size:indices[i] * train_dataloader.batch_size + train_dataloader.batch_size].float()
                 outputs = model(inputs)
-                loss = criterion(outputs, train_dataloader_filt.dataset.data[indices[i]*train_dataloader.batch_size:indices[i]*train_dataloader.batch_size+train_dataloader.batch_size].float())
+                loss = criterion(outputs, train_dataloader_filt._dataset.data[indices[i] * train_dataloader.batch_size:indices[i] * train_dataloader.batch_size + train_dataloader.batch_size].float())
                 # loss.backward()
                 # optimizer.step()
                 total_loss += loss.item()
@@ -105,9 +105,9 @@ if __name__ == '__main__':
             total_loss = 0
             with torch.no_grad():
                 for i in indices:
-                    inputs = test_dataloader.dataset.data[indices[i]*test_dataloader.batch_size:indices[i]*test_dataloader.batch_size+test_dataloader.batch_size].float()
+                    inputs = test_dataloader._dataset.data[indices[i] * test_dataloader.batch_size:indices[i] * test_dataloader.batch_size + test_dataloader.batch_size].float()
                     outputs = model(inputs)
-                    loss = criterion(outputs, test_dataloader_filt.dataset.data[indices[i]*test_dataloader.batch_size:indices[i]*test_dataloader.batch_size+test_dataloader.batch_size].float())
+                    loss = criterion(outputs, test_dataloader_filt._dataset.data[indices[i] * test_dataloader.batch_size:indices[i] * test_dataloader.batch_size + test_dataloader.batch_size].float())
                     total_loss += loss.item()
                     test_loss = total_loss / len(test_dataloader)
 
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 
     # encode a batch of sequences
     # batch = next(iter(test_dataloader))
-    inputs = test_dataloader.dataset.data[0].float()
+    inputs = test_dataloader._dataset.data[0].float()
     outputs = model.encode(inputs)
 
     # decode a batch of sequences, rescale it with scaler and plot them

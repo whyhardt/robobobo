@@ -47,8 +47,8 @@ if __name__=='__main__':
                                                                   start_zero=False,)
 
     gan = models.TransformerGenerator2(
-        latent_dim=gan_dict['configuration']['latent_dim'] + train_dataloader.dataset.data.shape[-1],
-        channels=train_dataloader.dataset.data.shape[-1],
+        latent_dim=gan_dict['configuration']['latent_dim'] + train_dataloader._dataset.data.shape[-1],
+        channels=train_dataloader._dataset.data.shape[-1],
         seq_len=gan_dict['configuration']['sequence_length_generated'],
         hidden_dim=int(gan_dict['configuration']['hidden_dim']*4),
         num_layers=4,

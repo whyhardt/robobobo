@@ -216,7 +216,7 @@ if __name__ == "__main__":
     # x = dataset.to_numpy()
     for sl in seq_len:
         dataset, _, _ = create_dataloader(dataset_path, sl, 32, train_ratio=1, standardize=False, differentiate=False)
-        dataset = dataset.dataset.data[0]
+        dataset = dataset._dataset.data[0]
         x = dataset.squeeze(0).detach().numpy()
 
         t = np.linspace(0, 1, len(x))

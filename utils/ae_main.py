@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
     # create the model
     if cfg["model"]["input_dim"] is None:
-        cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[2]
+        cfg["model"]["input_dim"] = train_dataloader._dataset.data.shape[2]
     model = TransformerAutoencoder(**cfg["model"])
 
     # create the optimizer and criterion

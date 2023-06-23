@@ -280,3 +280,7 @@ class ValueRoboboboNetwork(ValueNetwork):
                 state[i] = state[i].reshape(state[i].shape[0], -1).to(self.device)
         state = torch.concat(state, dim=1)
         return super(ValueRoboboboNetwork, self).forward(state)
+
+
+# class TemperatureNetwork(nn.Module):
+#     """Temperature network for SAC which takes in Q-Value """

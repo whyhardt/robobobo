@@ -111,9 +111,9 @@ if __name__ == '__main__':
                                                                   train_ratio=0.8,
                                                                   standardize=std_data,
                                                                   diff_data=diff_data,)
-    opt['n_samples'] = train_dataloader.dataset.data.shape[0]
-    opt['sequence_length'] = train_dataloader.dataset.data.shape[1]
-    opt['n_features'] = train_dataloader.dataset.data.shape[2]
+    opt['n_samples'] = train_dataloader._dataset.data.shape[0]
+    opt['sequence_length'] = train_dataloader._dataset.data.shape[1]
+    opt['n_features'] = train_dataloader._dataset.data.shape[2]
     opt['n_features_generator'] = opt['n_features']
 
     if opt['sequence_length'] % opt['patch_size'] != 0:
@@ -122,9 +122,9 @@ if __name__ == '__main__':
         padding = 0
         while (opt['sequence_length'] + padding) % default_args['patch_size'] != 0:
             padding += 1
-        padding = torch.zeros((train_dataloader.dataset.data.shape[0], padding, train_dataloader.dataset.data.shape[2]))
-        train_dataloader.dataset.data = torch.cat((train_dataloader.dataset.data, padding), dim=1)
-        opt['sequence_length'] = train_dataloader.dataset.data.shape[1]
+        padding = torch.zeros((train_dataloader._dataset.data.shape[0], padding, train_dataloader._dataset.data.shape[2]))
+        train_dataloader._dataset.data = torch.cat((train_dataloader._dataset.data, padding), dim=1)
+        opt['sequence_length'] = train_dataloader._dataset.data.shape[1]
     if opt['seq_len_generated'] == -1:
         opt['seq_len_generated'] = opt['sequence_length']
 
