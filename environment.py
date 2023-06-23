@@ -50,6 +50,7 @@ class Environment(gym.Env):
         self._cash_t_1 = cash
         self._cash_init = cash
         self._discrete_actions = discrete_actions
+        self._termination_reward = -100
 
         # mapping from binary action space ([0,1]) to real action space ([-1,1])
         # easier to switch between discrete and continuous action space
@@ -73,7 +74,13 @@ class Environment(gym.Env):
         if np.isnan(self.portfolio).any():
             print('nan in portfolio')
 
-        return self._get_obs(), self.reward(reward_scaling=True), self._terminated(), self._truncated(), {}
+        terminated = self._terminated()
+        if not terminated:
+            reward = self.reward(reward_scaling=True)
+        else:
+            reward = self._termination_reward
+
+        return self._get_obs(), reward, terminated, self._truncated(), {}
 
     def _buy(self, action):
         index_buy = (action > 0) * (self.stock_data[self.t] > 0)
