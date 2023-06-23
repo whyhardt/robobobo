@@ -35,17 +35,17 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': False,
-        'file_checkpoint': os.path.join('trained_rl', 'checkpoint.pt'),
+        'file_checkpoint': 'trained_rl/checkpoint',
         'file_data': os.path.join('stock_data', 'stocks_sp20_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
         'train': True,
-        'agent': 'sac',
+        'agent': 'ppo',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'num_epochs': 1e1,
-        'num_actions_per_epoch': 1e2,
+        'num_epochs': 5,
+        'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,
         'learning_rate': 3e-4,
@@ -149,9 +149,10 @@ if __name__ == '__main__':
     # --------------------------------------------
     # test RL framework
     # --------------------------------------------
-    env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1, discrete_actions=agent_dict[cfg['agent']][2])
-    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
-    # print(f"Test reward: {rewards[0]} +/- {std[0]}")
-    # plt.figure()
-    # plt.plot(rewards[0])
-    simple_test(env, agent, test=True, plot_reference=True)
+    # load environment
+    if cfg['env_id'] == 'Custom':
+        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,discrete_actions=agent_dict[cfg['agent']][2])
+        # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
+    else:
+        env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
+    simple_test(env, agent, deterministic=True)

@@ -110,7 +110,7 @@ def simple_train(
     return np.array(episode_rewards, dtype=np.float32), agent
 
 
-def simple_test(env: gym.Env, agent: BaseAlgorithm, test=True, plot=True, plot_reference=False):
+def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot_reference=False):
     """Test trained SAC agent"""
     done = False
     truncated = False
@@ -119,10 +119,10 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, test=True, plot=True, plot_r
     portfolio = []
     state = env.reset()
 
-    print(f"\nTest scenario (agent.train={not test}) started.")
+    print(f"\nTest scenario (deterministic={deterministic}) started.")
     while not done and not truncated:
         print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
-        action = agent.predict(state.reshape(1, -1), deterministic=test)[0]
+        action = agent.predict(state.reshape(1, -1), deterministic=deterministic)[0]
         state, _, done, _ = env.step(action)
         rewards.append(copy.deepcopy(env.total_equity().item()))
         actions.append(copy.deepcopy(action))
