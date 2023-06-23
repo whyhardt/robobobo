@@ -23,7 +23,7 @@ from utils.ae_dataloader import create_dataloader
 from training import simple_train, simple_test
 from environment import Environment
 
-import gym
+import gymnasium as gym
 from gymnasium.wrappers import TimeLimit
 
 
@@ -34,14 +34,14 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/checkpoint',
+        'load_checkpoint': True,
+        'file_checkpoint': 'trained_rl/ppo_Custom_20230623-132050.zip',
         'file_data': os.path.join('stock_data', 'stocks_sp20_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': True,
+        'train': False,
         'agent': 'ppo',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 5,
@@ -77,16 +77,16 @@ if __name__ == '__main__':
     # key: agent name
     # value: (agent constructor, agent load function, bool: does agent support discrete actions?)
     agent_dict = {'sac': (lambda policy, env: SAC(policy, env, verbose=1),
-                          lambda path: SAC.load(path),
+                          lambda path, env: SAC.load(path, env),
                           False),
                   'ddpg': (lambda policy, env: DDPG(policy, env, verbose=1),
-                           lambda path: DDPG.load(path),
+                           lambda path, env: DDPG.load(path, env),
                            False),
                   'td3': (lambda policy, env: TD3(policy, env, verbose=1),
-                          lambda path: TD3.load(path),
+                          lambda path, env: TD3.load(path, env),
                           False),
                   'ppo': (lambda policy, env: PPO(policy, env, verbose=1),
-                          lambda path: PPO.load(path),
+                          lambda path, env: PPO.load(path, env, print_system_info=True),
                           True),
                     }
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         agent = agent_dict[cfg['agent']][0]('MlpPolicy', env)
         print(f"Agent {cfg['agent']} initialized!")
     else:
-        agent = agent_dict[cfg['agent']][1](cfg['file_checkpoint'])
+        agent = agent_dict[cfg['agent']][1](cfg['file_checkpoint'], env)
         print(f"Agent {cfg['agent']} from path {cfg['file_checkpoint']} loaded!")
 
     # --------------------------------------------

@@ -1,7 +1,7 @@
 # Description: Environment for the stock trading agent. Inherits from gym.Env.
 from copy import deepcopy
 
-import gym
+import gymnasium as gym
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
