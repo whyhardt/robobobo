@@ -54,14 +54,14 @@ class Environment(gym.Env):
 
         # mapping from binary action space ([0,1]) to real action space ([-1,1])
         # easier to switch between discrete and continuous action space
-        self._transform_discrete_action = {
+        self._transform_binary_action = {
             0: -1,
             1: 1,
         }
 
     def step(self, action: np.ndarray):
         if self._discrete_actions:
-            action = np.array([self._transform_discrete_action[a] for a in action])
+            action = np.array([self._transform_binary_action[a] for a in action])
 
         self.t += 1
 
@@ -121,7 +121,7 @@ class Environment(gym.Env):
 
     def _terminated(self):
         total_equity_low = self.total_equity().item() <= 0.001*self._cash_init
-        cash_low = self.cash <= 0.001*self._cash_init
+        cash_low = self.cash <= 0.0001*self._cash_init
         return bool(total_equity_low or cash_low)
 
     def _truncated(self):
