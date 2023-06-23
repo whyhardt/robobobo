@@ -73,14 +73,6 @@ class Environment(gym.Env):
         if np.isnan(self.portfolio).any():
             print('nan in portfolio')
 
-        # check if episode is done
-        # episode is done if time limit is reached or total equity is 0 (no cash and no shares)
-        # TODO: Need distinction between time limit and total equity = 0
-        # if self._done():
-        #     done = True
-        # else:
-        #     done = False
-
         return self._get_obs(), self.reward(reward_scaling=True), self._terminated(), self._truncated(), {}
 
     def _buy(self, action):
