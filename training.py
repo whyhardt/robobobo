@@ -130,10 +130,10 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
     print(f"Test scenario terminated. Total reward: {np.round(np.sum(np.diff(rewards)), 2)}\n")
     env.close()
 
-    actions = np.array(actions)
+    actions = np.array(actions).reshape(len(actions), -1)
     actions_mean = np.mean(actions, axis=1)
     actions_std = np.std(actions, axis=1)
-    portfolio = np.array(portfolio)
+    portfolio = np.array(portfolio).reshape(len(portfolio), -1)
     portfolio_mean = np.mean(portfolio, axis=1)
     portfolio_std = np.std(portfolio, axis=1)
 
