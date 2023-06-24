@@ -75,10 +75,10 @@ class Environment(gym.Env):
             print('nan in portfolio')
 
         terminated = self._terminated()
-        if not terminated:
-            reward = self.reward(reward_scaling=True)
-        else:
-            reward = self._termination_reward
+        # if not terminated:
+        reward = self.reward(reward_scaling=True)
+        # else:
+        #     reward = self._termination_reward
 
         return self._get_obs(), reward, terminated, self._truncated(), {}
 
@@ -139,7 +139,7 @@ class Environment(gym.Env):
 
     def reward(self, reward_scaling=False):
         # Calculate reward for the current action
-        r = self.total_equity() - self._cash_t_1
+        r = self.total_equity() - self._cash_init
         if reward_scaling:
             r *= self._reward_scaling
         return r
