@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
         # training parameters
         'train': True,
-        'agent': 'ppo',
+        'agent': 'sac',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 5,
         'num_actions_per_epoch': 1e3,
@@ -126,7 +126,7 @@ if __name__ == '__main__':
             avg_reward, avg_std = evaluate_policy(agent, env, n_eval_episodes=5)
             avg_rewards.append(avg_reward)
             avg_stds.append(avg_std)
-            print(f"Epoch {i}/{int(cfg['num_epochs'])}: avg_reward={avg_reward:.2f} +/- {avg_std:.2f}")
+            print(f"Epoch {i+1}/{int(cfg['num_epochs'])}: avg_reward={avg_reward:.2f} +/- {avg_std:.2f}")
 
         # --------------------------------------------
         # plot results

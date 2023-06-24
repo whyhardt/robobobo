@@ -71,6 +71,9 @@ class Environment(gym.Env):
         self._sell(action)
         self._buy(action)
 
+        if self.total_equity() < 0:
+            print('negative equity')
+
         if np.isnan(self.portfolio).any():
             print('nan in portfolio')
 
