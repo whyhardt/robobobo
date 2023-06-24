@@ -74,13 +74,13 @@ class Environment(gym.Env):
         if np.isnan(self.portfolio).any():
             print('nan in portfolio')
 
-        terminated = self._terminated()
+        # terminated = self._terminated()
         # if not terminated:
-        reward = self.reward(reward_scaling=True)
+        # reward = self.reward(reward_scaling=True)
         # else:
         #     reward = self._termination_reward
 
-        return self._get_obs(), reward, terminated, self._truncated(), {}
+        return self._get_obs(), self.reward(reward_scaling=True), self._terminated(), self._truncated(), {}
 
     def _buy(self, action):
         index_buy = (action > 0) * (self.stock_data[self.t] > 0)
