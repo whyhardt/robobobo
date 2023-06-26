@@ -36,14 +36,14 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/ppo_Custom_20230623-132050.zip',
-        'file_data': os.path.join('stock_data', 'stocks_sp20_2010_2020.csv'),
+        'file_checkpoint': 'trained_rl/sac20_3e6.pt',
+        'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
         'train': True,
-        'agent': 'sac',
+        'agent': 'ppo_cont',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 5,
         'num_actions_per_epoch': 1e3,
@@ -72,7 +72,7 @@ if __name__ == '__main__':
         'reward_scaling': 1e-4,
     }
 
-    list_valid_agents = ['sac', 'ddpg', 'td3', 'ppo']
+    list_valid_agents = ['sac', 'ddpg', 'td3', 'ppo_cont', 'ppo_disc']
     assert cfg['agent'] in list_valid_agents, f"Agent must be one of: {list_valid_agents}"
     # agent_dict structure:
     # key: agent name
@@ -86,9 +86,12 @@ if __name__ == '__main__':
                   'td3': (lambda policy, env: TD3(policy, env, verbose=1),
                           lambda path, env: TD3.load(path, env),
                           False),
-                  'ppo': (lambda policy, env: PPO(policy, env, verbose=1),
-                          lambda path, env: PPO.load(path, env, print_system_info=True),
-                          True),
+                  'ppo_cont': (lambda policy, env: PPO(policy, env, verbose=1),
+                               lambda path, env: PPO.load(path, env, print_system_info=True),
+                               False),
+                  'ppo_disc': (lambda policy, env: PPO(policy, env, verbose=1),
+                               lambda path, env: PPO.load(path, env, print_system_info=True),
+                               True),
                     }
 
     print('Initializing framework...')

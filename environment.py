@@ -51,6 +51,7 @@ class Environment(gym.Env):
         self._cash_init = cash
         self._discrete_actions = discrete_actions
         self._termination_reward = -100
+        self._cash_threshold = 1e-2
 
         # mapping from binary action space ([0,1]) to real action space ([-1,1])
         # easier to switch between discrete and continuous action space
@@ -71,12 +72,16 @@ class Environment(gym.Env):
         self._sell(action)
         self._buy(action)
 
+        if self.cash < self._cash_threshold:
+            self.cash = 0.0
+
         if self.total_equity() < 0:
             print('negative equity')
 
         if np.isnan(self.portfolio).any():
             print('nan in portfolio')
 
+        # termination penalty
         # terminated = self._terminated()
         # if not terminated:
         # reward = self.reward(reward_scaling=True)
@@ -124,8 +129,9 @@ class Environment(gym.Env):
 
     def _terminated(self):
         total_equity_low = self.total_equity().item() <= 0.001*self._cash_init
-        cash_low = self.cash <= 0.0001*self._cash_init
-        return bool(total_equity_low or cash_low)
+        # cash_low = self.cash <= 0.0001*self._cash_init
+        # return bool(total_equity_low or cash_low)
+        return bool(total_equity_low)
 
     def _truncated(self):
         return self.t == len(self.stock_data) - 1
@@ -142,7 +148,7 @@ class Environment(gym.Env):
 
     def reward(self, reward_scaling=False):
         # Calculate reward for the current action
-        r = self.total_equity() - self._cash_init
+        r = self.total_equity() - self._cash_t_1
         if reward_scaling:
             r *= self._reward_scaling
         return r
