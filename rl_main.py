@@ -13,6 +13,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import torch
 from matplotlib import pyplot as plt
 
 from stable_baselines3 import PPO, SAC, DDPG, TD3
@@ -35,17 +36,17 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/sac20_3e6.pt',
-        'file_data': os.path.join('stock_data', 'stocks_sp1_2010_2020.csv'),
+        'load_checkpoint': True,
+        'file_checkpoint': 'trained_rl/ppocont20_130.pt',
+        'file_data': os.path.join('stock_data', 'stocks_sp20_2010_2020.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': True,
+        'train': False,
         'agent': 'ppo_cont',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'num_epochs': 5,
+        'num_epochs': 10,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,

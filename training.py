@@ -117,6 +117,7 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
     rewards = []
     actions = []
     portfolio = []
+    cash = []
     state = env.reset()[0]
 
     print(f"\nTest scenario (deterministic={deterministic}) started.")
@@ -127,9 +128,15 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         rewards.append(copy.deepcopy(env.total_equity().item()))
         actions.append(copy.deepcopy(action))
         portfolio.append(copy.deepcopy(env.portfolio))
+        cash.append(copy.deepcopy(env.cash))
+        if env.cash == 0:
+            print("Cash is zero.")
+            if np.sum(portfolio[-2]) - np.sum(portfolio[-1]) != 0:
+                print("Warning: Portfolio changed although cash is zero.")
     print(f"Test scenario terminated. Total reward: {np.round(np.sum(np.diff(rewards)), 2)}\n")
     env.close()
 
+    rewards = np.array(rewards).reshape(len(rewards), -1)
     actions = np.array(actions).reshape(len(actions), -1)
     actions_mean = np.mean(actions, axis=1)
     actions_std = np.std(actions, axis=1)
@@ -141,38 +148,34 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         fig, axs = plt.subplots(4, 1, sharex=True)
 
         # plot the average of all stock prices
-        avg = np.mean(env.stock_data, axis=1)
-        axs[0].plot(avg)
-        axs[0].set_ylabel('avg price')
-        # axs[0].xlabel('Time step')
-        # axs[0].title(f"Avg stock price in [$] (Grow: {avg[-1] / avg[0]:.2f})")
-        # axs[0].show()
+        avg = np.mean(env.stock_data[:rewards.shape[0]], axis=1)
+        axs[0].plot(avg/avg[0], label='avg price')
+        axs[0].plot(rewards/rewards[0], label='total equity')
+        axs[0].set_ylabel('rel. price')
+        axs[0].legend()
+        axs[0].grid()
 
-        axs[1].plot(rewards, label='total equity')
-        axs[1].plot(np.convolve(rewards, np.ones(10) / 10, mode='valid'), label='total equity (smoothed)')
-        axs[1].set_ylabel('total equity')
-        # axs[1].xlabel('time steps')
-        # axs[1].title("total equity of test")
-        # axs[1].legend()
-        # axs[1].show()
 
-        axs[2].plot(actions_mean, label='actions')
-        axs[2].fill_between(np.arange(len(actions_mean)), actions_mean-actions_std, actions_mean+actions_std, alpha=0.2)
-        # axs[2].plot(np.convolve(np.mean(actions, axis=1), np.ones(10) / 10, mode='valid'), label='actions (smoothed)')
-        axs[2].set_ylabel('actions')
-        # axs[2].xlabel('time steps')
-        # axs[2].title("actions of test")
-        # axs[2].legend()
-        # axs[2].show()
+        axs[1].plot(actions_mean, label='actions')
+        axs[1].fill_between(np.arange(len(actions_mean)), actions_mean-actions_std, actions_mean+actions_std, alpha=0.2)
+        axs[1].set_ylabel('actions')
+        axs[1].grid()
 
-        axs[3].plot(np.mean(portfolio, axis=1), label='portfolio')
-        axs[3].fill_between(np.arange(len(portfolio_mean)), portfolio_mean-portfolio_std, portfolio_mean+portfolio_std, alpha=0.2)
-        # axs[3].plot(np.convolve(np.mean(portfolio, axis=1), np.ones(10) / 10, mode='valid'), label='portfolio (smoothed)')
-        axs[3].set_ylabel('portfolio')
+        axs[2].plot(np.mean(portfolio, axis=1), label='portfolio')
+        axs[2].fill_between(np.arange(len(portfolio_mean)), portfolio_mean-portfolio_std, portfolio_mean+portfolio_std, alpha=0.2)
+        axs[2].set_ylabel('portfolio')
+        axs[2].grid()
+
+
+        axs[3].plot(cash, label='cash')
+        axs[3].set_ylabel('cash')
         axs[3].set_xlabel('time steps (days)')
-        # axs[3].title("portfolio of test")
-        # axs[3].legend()
-        # axs[3].show()
+        axs[3].set_xticks(np.arange(0, len(cash), 5))
+        # set orientation of x labels
+        for tick in axs[3].get_xticklabels():
+            tick.set_rotation(90)
+        # set x labels to every 5th tick
+        axs[3].grid()
 
         plt.show()
         # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")

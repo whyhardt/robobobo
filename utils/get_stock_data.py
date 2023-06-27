@@ -43,12 +43,14 @@ if __name__ == '__main__':
 			'UTX','UHS','UNM','VFC','VLO','VAR','VTR','VRSN','VRSK','VZ','VRTX','VIAB','V','VNO',
 			'VMC','WMT','WBA','DIS','WM','WAT','WEC','WFC','HCN','WDC','WU','WRK','WY','WHR','WMB',
 			'WLTW','WYN','WYNN','XEL','XRX','XLNX','XL','XYL','YUM','ZBH','ZION','ZTS']
+	start = '2010-01-01'
+	end = '2020-12-31'
 
 	# download stocks given in list stocks
 	df = pd.DataFrame()
 	for s in stocks:
 		# data = yf.download(s, start='2023-04-11', end='2023-04-18', interval="1m", auto_adjust=True)
-		data = yf.download(s, start='2010-01-01', end='2020-12-31', auto_adjust=True)
+		data = yf.download(s, start=start, end=end, auto_adjust=True)
 		df[s] = data['Open']
 		df[s] = df[s].mask(df[s].isna(), 0)  # mask all nan values with -1
 
