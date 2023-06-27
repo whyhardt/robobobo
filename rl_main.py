@@ -124,12 +124,17 @@ if __name__ == '__main__':
     # --------------------------------------------
 
     if cfg['train']:
-        avg_rewards, avg_stds = [], []
+        avg_rewards, avg_stds, best_reward = [], [], 0
         for i in range(int(cfg['num_epochs'])):
             agent.learn(total_timesteps=cfg['num_actions_per_epoch'], log_interval=10)
             avg_reward, avg_std = evaluate_policy(agent, env, n_eval_episodes=5)
             avg_rewards.append(avg_reward)
             avg_stds.append(avg_std)
+            if avg_reward > best_reward:
+                best_reward = avg_reward
+                agent.save("best_checkpoint.pt")
+            if cfg['checkpoint_interval'] is not None and i % cfg['checkpoint_interval'] == 0:
+                agent.save("checkpoint.pt")
             print(f"Epoch {i+1}/{int(cfg['num_epochs'])}: avg_reward={avg_reward:.2f} +/- {avg_std:.2f}")
 
         # --------------------------------------------
