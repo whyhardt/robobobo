@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from utils import ae_dataloader
-from nn_architecture import transformer_autoencoder
+from nn_architecture import autoencoder
 
 
 class plotter:

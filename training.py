@@ -152,9 +152,9 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         axs[0].plot(avg/avg[0], label='avg price')
         axs[0].plot(rewards/rewards[0], label='total equity')
         axs[0].set_ylabel('rel. price')
+        axs[0].set_ylim([0, np.max(rewards/rewards[0])*1.1])
         axs[0].legend()
         axs[0].grid()
-
 
         axs[1].plot(actions_mean, label='actions')
         axs[1].fill_between(np.arange(len(actions_mean)), actions_mean-actions_std, actions_mean+actions_std, alpha=0.2)
@@ -166,7 +166,6 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         axs[2].set_ylabel('portfolio')
         axs[2].grid()
 
-
         axs[3].plot(cash, label='cash')
         axs[3].set_ylabel('cash')
         axs[3].set_xlabel('time steps (days)')
@@ -176,6 +175,7 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
             tick.set_rotation(90)
         # set x labels to every 5th tick
         axs[3].grid()
+        # axs[3].set_ylim([0, len(cash)-3])
 
         plt.show()
         # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
@@ -226,9 +226,9 @@ def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
 
     if cmap:
         # Plot the matrix using imshow
-        plt.imshow(matrix, cmap=cmap, vmin=vmin, vmax=vmax)
-        plt.ylabel('time steps')
-        plt.xlabel('features')
+        plt.imshow(matrix.T, cmap=cmap, vmin=vmin, vmax=vmax)
+        plt.xlabel('time steps')
+        plt.ylabel('features')
         plt.title(title if title is not None else '')
         # set width of image to 10 inches
         plt.show()

@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 from torch import nn
 
-from nn_architecture import models, transformer_autoencoder
+from nn_architecture import models, autoencoder
 from utils.ae_dataloader import create_dataloader
 
 if __name__=='__main__':

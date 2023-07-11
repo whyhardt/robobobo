@@ -1,17 +1,20 @@
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, Normalizer
 from matplotlib import pyplot as plt
 
 
 class MultivariateTimeSeriesDataset(Dataset):
-    def __init__(self, data, seq_len, standardize=False, differentiate=False, start_zero=False, shuffle=False):
+    def __init__(self, data, seq_len, normalize=False, standardize=False, differentiate=False, start_zero=False, shuffle=False):
         self.seq_len = seq_len
         self.standardize = standardize
         self.differentiate = differentiate
+        self.normalize = normalize
         self.start_zero = start_zero
         self.scaler = StandardScaler()
+        self.min = None
+        self.max = None
         self.data = self._process_data(data, shuffle=shuffle)
 
     def __getitem__(self, index):
@@ -68,6 +71,13 @@ class MultivariateTimeSeriesDataset(Dataset):
         if self.standardize:
             print("Data standardized!")
 
+        # normalize the data if required
+        # for i, d in enumerate(data):
+        #     if self.normalize:
+        #         min = d.min(dim=0)[0].reshape(1, -1)
+        #         max = d.max(dim=0)[0].reshape(1, -1)
+        #         data[i] = d - min / (max - min)
+
         # convert the data another time
         data = torch.Tensor(data).float()
 
@@ -79,8 +89,9 @@ class MultivariateTimeSeriesDataset(Dataset):
         return data
 
 
-def create_dataloader(training_data, seq_len, batch_size, train_ratio, standardize=True, differentiate=False,
-                      start_zero=False, **kwargs):
+def create_dataloader(training_data, seq_len, batch_size, train_ratio,
+                      normalize=False, standardize=False,
+                      differentiate=False, start_zero=False, **kwargs):
     # load the data from the csv file
     data = pd.read_csv(training_data, index_col=0)
     print(f"Dataset shape is {data.values.shape}")
@@ -92,12 +103,14 @@ def create_dataloader(training_data, seq_len, batch_size, train_ratio, standardi
     # create the datasets and dataloaders
     train_dataset, test_dataset, train_dataloader, test_dataloader = None, None, None, None
     if len(train_data):
-        train_dataset = MultivariateTimeSeriesDataset(train_data, seq_len=seq_len, standardize=standardize,
+        train_dataset = MultivariateTimeSeriesDataset(train_data, seq_len=seq_len,
+                                                      normalize=normalize, standardize=standardize,
                                                       differentiate=differentiate, start_zero=start_zero, shuffle=True)
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     if len(test_data):
-        test_dataset = MultivariateTimeSeriesDataset(test_data, seq_len=seq_len, standardize=standardize,
-                                                     differentiate=differentiate, start_zero=start_zero, shuffle=True)
+        test_dataset = MultivariateTimeSeriesDataset(test_data, seq_len=seq_len,
+                                                      normalize=normalize, standardize=standardize,
+                                                      differentiate=differentiate, start_zero=start_zero, shuffle=True)
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_dataloader, test_dataloader, train_dataset.scaler

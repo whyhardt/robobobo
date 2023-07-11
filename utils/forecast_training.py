@@ -11,7 +11,7 @@ import torch
 from matplotlib import pyplot as plt
 
 from nn_architecture.models import TransformerGenerator
-from nn_architecture.transformer_autoencoder import TransformerAutoencoder
+from nn_architecture.autoencoder import TransformerAutoencoder
 from utils.ae_dataloader import create_dataloader
 from utils.get_filter import moving_average
 

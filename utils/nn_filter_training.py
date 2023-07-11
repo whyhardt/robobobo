@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch
 
 from utils.ae_dataloader import create_dataloader
-from nn_architecture.transformer_autoencoder import LSTMAutoencoder, save, train
+from nn_architecture.autoencoder import LSTMAutoencoder, save, train
 
 if __name__ == '__main__':
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

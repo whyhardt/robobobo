@@ -37,14 +37,14 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': True,
-        'file_checkpoint': 'trained_rl/sac20_6e6.pt',
-        'file_data': os.path.join('stock_data', 'stocks_sp500_2010_2020.csv'),
+        'file_checkpoint': 'trained_rl/ppocont142_6e6.pt',
+        'file_data': os.path.join('stock_data', 'portfolio_custom142_2008_2022.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
         'train': False,
-        'agent': 'sac',
+        'agent': 'ppo_cont',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 10,
         'num_actions_per_epoch': 1e3,
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         'learning_rate': 3e-4,
         'temperature': 0.0001,
         'train_test_split': 0.8,
-        'replay_buffer_size': 1e6,
+        'replay_buffer_size': int(1e4),
         'parameter_update_interval': 50,
         'polyak': 0.995,
         'gamma': 0.99,
@@ -78,19 +78,19 @@ if __name__ == '__main__':
     # agent_dict structure:
     # key: agent name
     # value: (agent constructor, agent load function, bool: does agent support discrete actions?)
-    agent_dict = {'sac': (lambda policy, env: SAC(policy, env, verbose=1),
+    agent_dict = {'sac': (lambda policy, env: SAC(policy, env, verbose=0, buffer_size=cfg['replay_buffer_size'], train_freq=cfg['parameter_update_interval'], gradient_steps=cfg['parameter_update_interval'],),
                           lambda path, env: SAC.load(path, env),
                           False),
-                  'ddpg': (lambda policy, env: DDPG(policy, env, verbose=1),
+                  'ddpg': (lambda policy, env: DDPG(policy, env, verbose=0),
                            lambda path, env: DDPG.load(path, env),
                            False),
-                  'td3': (lambda policy, env: TD3(policy, env, verbose=1),
+                  'td3': (lambda policy, env: TD3(policy, env, verbose=0),
                           lambda path, env: TD3.load(path, env),
                           False),
-                  'ppo_cont': (lambda policy, env: PPO(policy, env, verbose=1),
+                  'ppo_cont': (lambda policy, env: PPO(policy, env, verbose=0),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
                                False),
-                  'ppo_disc': (lambda policy, env: PPO(policy, env, verbose=1),
+                  'ppo_disc': (lambda policy, env: PPO(policy, env, verbose=0),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
                                True),
                     }
