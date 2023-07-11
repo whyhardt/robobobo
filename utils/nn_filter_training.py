@@ -16,7 +16,7 @@ if __name__ == '__main__':
     training = True
 
     model_dict = None
-    model_name = 'checkpoint.pt'
+    model_name = 'transformer_ae.pt'
     model_dir = '../trained_filter'
 
     data_dir = '../stock_data'

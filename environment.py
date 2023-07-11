@@ -20,6 +20,7 @@ class Environment(gym.Env):
                  random_splits=True,
                  time_limit=-1,
                  discrete_actions=True,
+                 recurrent=False,
                  ):
 
         # set action and observation space
@@ -29,7 +30,10 @@ class Environment(gym.Env):
         else:
             self.action_space = gym.spaces.Box(low=-1, high=1, shape=(stock_data.shape[-1],), dtype=np.float32)
         # shape of observation space: (cash, portfolio, stock_prices)
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1, 1+stock_data.shape[-1]+stock_data.shape[-1]*observation_length), dtype=np.float32)
+        if recurrent:
+            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(observation_length + 2, stock_data.shape[-1]), dtype=np.float32)
+        else:
+            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1, 1+stock_data.shape[-1]+stock_data.shape[-1]*observation_length), dtype=np.float32)
 
         # set data
         self._dataset = stock_data  # whole training dataset
@@ -52,6 +56,7 @@ class Environment(gym.Env):
         self._discrete_actions = discrete_actions
         self._termination_reward = -100
         self._cash_threshold = 1e-2
+        self._recurrent = recurrent
 
         # mapping from binary action space ([0,1]) to real action space ([-1,1])
         # easier to switch between discrete and continuous action space
@@ -151,8 +156,14 @@ class Environment(gym.Env):
         stock_prices -= self.stock_data[self.t - self.observation_length]
         stock_prices /= np.max(np.abs(stock_prices))
         stock_prices[np.isnan(stock_prices)] = 0
-        stock_prices = np.reshape(stock_prices, (-1,))
-        return np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
+        if not self._recurrent:
+            stock_prices = np.reshape(stock_prices, (-1,))
+            return np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
+        else:
+            # obs_space = np.concatenate((portfolio, stock_prices), axis=1)
+            cash = np.tile(cash, (1, stock_prices.shape[-1]))
+            # portfolio = np.tile(portfolio, (self.observation_length, 1))
+            return np.concatenate((cash, portfolio.reshape(1, -1), stock_prices), axis=0, dtype=np.float32)
 
     def reward(self, reward_scaling=False):
         # Calculate reward for the current action

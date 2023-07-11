@@ -33,7 +33,7 @@ if __name__ == '__main__':
             "train_ratio":  .8,
             "standardize":  True,
             "differentiate": True,
-            "default_save_path": os.path.join('..', 'trained_fc', 'checkpoint.pt'),
+            "default_save_path": os.path.join('..', 'trained_fc', 'transformer_ae.pt'),
         },
         "model": {
             'state_dict': None,

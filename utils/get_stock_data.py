@@ -104,5 +104,11 @@ if __name__ == '__main__':
 		if df[s][0] == 0 and df[s][1] != 0:
 			df[s][0] = df[s][1]
 
+	# find stocks with most zeros
+	df_zeros = df[df == 0].count(axis=0)
+	df_zeros = df_zeros.sort_values(ascending=False)
+	# remove 2 stocks with most zeros
+	df = df.drop(columns=[df_zeros.index[0], df_zeros.index[1]])
+
 	# save dataframes in csv files
-	# df.to_csv('..\stock_data\portfolio_custom142_2008_2022.csv')
+	# df.to_csv('..\stock_data\portfolio_custom140_2008_2022.csv')

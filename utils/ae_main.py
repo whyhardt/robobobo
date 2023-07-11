@@ -8,7 +8,8 @@ import torch
 
 from utils.ae_dataloader import create_dataloader
 from utils.get_filter import moving_average as filter
-from nn_architecture.autoencoder import LSTMAutoencoder, save, train
+from nn_architecture.autoencoder import LSTMDoubleAutoencoder, TransformerAutoencoder, save, train, \
+    LSTMTransformerAutoencoder, TransformerDoubleAutoencoder
 
 if __name__ == '__main__':
 
@@ -17,28 +18,30 @@ if __name__ == '__main__':
     training = True
 
     model_dict = None
-    model_name = 'checkpoint.pt'
+    model_name = 'double_transformer_ae.pt'
     model_dir = '../trained_ae'
 
     data_dir = '../stock_data'
-    data_file = 'portfolio_custom142_2008_2022.csv'  # path to the csv file
+    data_file = 'portfolio_custom140_2008_2022.csv'  # path to the csv file
 
     # configuration
     cfg = {
         "model": {
             "state_dict":   None,
             "input_dim":    None,
-            "hidden_dim":   256,
-            "output_dim":   256,
+            "hidden_dim":   50,
+            "output_dim":   50,
+            "output_dim_2": 10,
             "num_layers":   3,
-            "dropout":      .3,
+            "dropout":      .1,
+            "activation":   nn.Tanh(),
         },
         "training": {
             "lr":           1e-4,
-            "epochs":       2,
+            "epochs":       50,
         },
         "general": {
-            "seq_len":          50,
+            "seq_len":          20,
             "scaler":           None,
             "training_data":    os.path.join(data_dir, data_file),
             "batch_size":       32,
@@ -47,7 +50,7 @@ if __name__ == '__main__':
             "differentiate":    False,
             "normalize":        True,
             "start_zero":       True,
-            "default_save_path": os.path.join('../trained_ae', 'checkpoint.pt'),
+            "default_save_path": os.path.join('../trained_ae', 'transformer_ae.pt'),
         }
     }
 
@@ -64,7 +67,12 @@ if __name__ == '__main__':
     # create the model
     if cfg["model"]["input_dim"] is None:
         cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[-1]
-    model = LSTMAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
+    # model = LSTMDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
+    model = TransformerDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
+    # model = LSTMTransformerAutoencoder(**cfg["model"])
+    if cfg["model"]["state_dict"] is not None:
+        model.load_state_dict(cfg["model"]["state_dict"])
+        print("Loaded model state dict!")
 
     # create the optimizer and criterion
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["training"]["lr"])
@@ -88,7 +96,8 @@ if __name__ == '__main__':
 
     # encode a batch of sequences
     batch = next(iter(test_dataloader))
-    inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
+    # inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
+    inputs = batch.float()
     # win_lens = np.random.randint(29, 50, size=batch.shape[-1])
     # inputs = batch.float()
     # inputs_filtered = torch.zeros_like(inputs)

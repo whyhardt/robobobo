@@ -1,3 +1,4 @@
+import math
 import os
 import random
 from typing import Optional
@@ -5,6 +6,8 @@ from typing import Optional
 import pandas as pd
 import torch
 import torch.nn as nn
+from torch import Tensor
+
 
 # from utils.get_filter import moving_average as filter
 
@@ -24,26 +27,23 @@ class Autoencoder(nn.Module):
         raise NotImplementedError
 
 
-class TransformerAutoencoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout, hidden_dec=256, **kwargs):
-        super(TransformerAutoencoder, self).__init__()
+class TransformerAutoencoder(Autoencoder):
+    def __init__(self, input_dim, output_dim, hidden_dim=256, num_layers=3, dropout=0.1, **kwargs):
+        super(TransformerAutoencoder, self).__init__(input_dim, output_dim, hidden_dim, num_layers, dropout)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, nhead=5, dim_feedforward=hidden_dim,
-                                                        dropout=dropout)
+        self.pe_enc = PositionalEncoder(batch_first=True, d_model=input_dim)
+        self.linear_enc_in = nn.Linear(input_dim, input_dim)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        self.linear_enc_out = nn.Linear(input_dim, output_dim)
 
-        self.linear_enc = nn.Linear(input_dim, output_dim)
-
-        self.decoder_layer = nn.TransformerEncoderLayer(d_model=output_dim, nhead=5, dim_feedforward=hidden_dim,
-                                                        dropout=dropout)
+        self.pe_dec = PositionalEncoder(batch_first=True, d_model=output_dim)
+        self.linear_dec_in = nn.Linear(output_dim, output_dim)
+        self.decoder_layer = nn.TransformerEncoderLayer(d_model=output_dim, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
         self.decoder = nn.TransformerEncoder(self.decoder_layer, num_layers=num_layers)
-        self.linear_dec = nn.Linear(output_dim, input_dim)
+        self.linear_dec_out = nn.Linear(output_dim, input_dim)
 
         self.tanh = nn.Tanh()
 
@@ -53,14 +53,18 @@ class TransformerAutoencoder(nn.Module):
         return x
 
     def encode(self, data):
-        x = self.encoder(data.to(self.device))
-        x = self.linear_enc(x)
+        x = self.pe_enc(data)
+        x = self.linear_enc_in(x)
+        x = self.encoder(x)
+        x = self.linear_enc_out(x)
         x = self.tanh(x)
         return x
 
     def decode(self, encoded):
-        x = self.decoder(encoded)
-        x = self.linear_dec(x)
+        x = self.pe_dec(encoded)
+        x = self.linear_dec_in(x)
+        x = self.decoder(x)
+        x = self.linear_dec_out(x)
         x = self.tanh(x)
         return x
 
@@ -70,23 +74,39 @@ class TransformerAutoencoder(nn.Module):
         # torch.save(save, os.path.join(path, file))
 
 
-class TransformerAutoencoder_v0(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout, hidden_dec=256, **kwargs):
-        super(TransformerAutoencoder_v0, self).__init__()
+class TransformerDoubleAutoencoder(Autoencoder):
+    def __init__(self, input_dim, output_dim, sequence_length, output_dim_2, hidden_dim=256, num_layers=3, dropout=0.1, **kwargs):
+        super(TransformerDoubleAutoencoder, self).__init__(input_dim, output_dim, hidden_dim, num_layers, dropout)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, nhead=5, dim_feedforward=hidden_dim,
-                                                        dropout=dropout)
+        # encoder block features
+        self.pe_enc = PositionalEncoder(batch_first=True, d_model=input_dim)
+        self.linear_enc_in = nn.Linear(input_dim, input_dim)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        self.linear_enc_out = nn.Linear(input_dim, output_dim)
 
-        self.linear_enc = nn.Linear(input_dim, output_dim)
+        # encoder block sequence
+        self.pe_enc_seq = PositionalEncoder(batch_first=True, d_model=sequence_length)
+        self.linear_enc_in_seq = nn.Linear(sequence_length, sequence_length)
+        self.encoder_layer_seq = nn.TransformerEncoderLayer(d_model=sequence_length, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
+        self.encoder_seq = nn.TransformerEncoder(self.encoder_layer_seq, num_layers=num_layers)
+        self.linear_enc_out_seq = nn.Linear(sequence_length, output_dim_2)
 
-        self.linear_dec = nn.Linear(output_dim, input_dim)
+        # decoder block sequence
+        self.pe_dec_seq = PositionalEncoder(batch_first=True, d_model=output_dim_2)
+        self.linear_dec_in_seq = nn.Linear(output_dim_2, output_dim_2)
+        self.decoder_layer_seq = nn.TransformerEncoderLayer(d_model=output_dim_2, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
+        self.decoder_seq = nn.TransformerEncoder(self.decoder_layer_seq, num_layers=num_layers)
+        self.linear_dec_out_seq = nn.Linear(output_dim_2, sequence_length)
+
+        # decoder block features
+        self.pe_dec = PositionalEncoder(batch_first=True, d_model=output_dim)
+        self.linear_dec_in = nn.Linear(output_dim, output_dim)
+        self.decoder_layer = nn.TransformerEncoderLayer(d_model=output_dim, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
+        self.decoder = nn.TransformerEncoder(self.decoder_layer, num_layers=num_layers)
+        self.linear_dec_out = nn.Linear(output_dim, input_dim)
 
         self.tanh = nn.Tanh()
 
@@ -96,18 +116,103 @@ class TransformerAutoencoder_v0(nn.Module):
         return x
 
     def encode(self, data):
-        x = self.encoder(data.to(self.device))
-        x = self.linear_enc(x)
-        return x
+        # encoder features
+        x = self.pe_enc(data)
+        x = self.linear_enc_in(x)
+        x = self.encoder(x)
+        x = self.linear_enc_out(x)
+        x = self.tanh(x)
+
+        # encoder sequence
+        x = self.pe_enc_seq(x.permute(0, 2, 1))
+        x = self.linear_enc_in_seq(x)
+        x = self.encoder_seq(x)
+        x = self.linear_enc_out_seq(x)
+        x = self.tanh(x)
+        return x.permute(0, 2, 1)
 
     def decode(self, encoded):
-        x = self.linear_dec(encoded)
+        # decoder sequence
+        x = self.pe_dec_seq(encoded.permute(0, 2, 1))
+        x = self.linear_dec_in_seq(x)
+        x = self.decoder_seq(x)
+        x = self.linear_dec_out_seq(x)
+        x = self.tanh(x)
+
+        # decoder features
+        x = self.pe_dec(x.permute(0, 2, 1))
+        x = self.linear_dec_in(x)
+        x = self.decoder(x)
+        x = self.linear_dec_out(x)
+        x = self.tanh(x)
         return x
 
     def save(self, path):
         path = '../trained_ae'
         file = f'ae_{pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")}.pth'
         # torch.save(save, os.path.join(path, file))
+
+
+class PositionalEncoder(nn.Module):
+    """
+    The authors of the original transformer paper describe very succinctly what
+    the positional encoding layer does and why it is needed:
+
+    "Since our model contains no recurrence and no convolution, in order for the
+    model to make use of the order of the sequence, we must inject some
+    information about the relative or absolute position of the tokens in the
+    sequence." (Vaswani et al, 2017)
+    Adapted from:
+    https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+    """
+
+    def __init__(
+            self,
+            dropout: float = 0.1,
+            max_seq_len: int = 5000,
+            d_model: int = 512,
+            batch_first: bool = True
+    ):
+        """
+        Parameters:
+            dropout: the dropout rate
+            max_seq_len: the maximum length of the input sequences
+            d_model: The dimension of the output of sub-layers in the model
+                     (Vaswani et al, 2017)
+        """
+
+        super().__init__()
+
+        self.d_model = d_model
+
+        self.dropout = nn.Dropout(p=dropout)
+
+        self.batch_first = batch_first
+
+        self.x_dim = 1 if batch_first else 0
+
+        # copy pasted from PyTorch tutorial
+        position = torch.arange(max_seq_len).unsqueeze(1)
+        # print(f"shape of position is {position.shape}")
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        # print(f"shape of div_term is {div_term.shape}")
+        pe = torch.zeros(1, max_seq_len, d_model)
+
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+
+        pe[0, :, 1::2] = torch.cos(position * div_term)
+
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Args:
+            x: Tensor, shape [batch_size, enc_seq_len, dim_val] or
+               [enc_seq_len, batch_size, dim_val]
+        """
+        x = x + self.pe[:, :x.size(self.x_dim)]
+
+        return self.dropout(x)
 
 
 class LSTMAutoencoder(Autoencoder):
@@ -119,29 +224,31 @@ class LSTMAutoencoder(Autoencoder):
         self.sequence_length = sequence_length
 
         # encoder block
-        self.batchnorm = nn.BatchNorm1d(self.input_dim)
-        self.enc_lin_in = nn.Linear(self.input_dim, self.hidden_dim)
-        self.enc_lstm = nn.LSTM(self.hidden_dim, self.output_dim, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
+        self.enc_lin_in = nn.Linear(self.input_dim, self.input_dim)
+        self.enc_lstm = nn.LSTM(self.input_dim, self.output_dim, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
         self.enc_lin_out = nn.Linear(self.output_dim, self.output_dim)
         self.enc_dropout = nn.Dropout(self.dropout)
 
         # decoder block
-        decoder_block = nn.ModuleList()
-        if self.num_layers > 1:
-            decoder_block.append(nn.Linear(self.output_dim, hidden_dim))
-            decoder_block.append(self.activation)
-            decoder_block.append(nn.Dropout(self.dropout))
-        if self.num_layers > 2:
-            for _ in range(self.num_layers-2):
-                decoder_block.append(nn.Linear(self.hidden_dim, self.hidden_dim))
-                decoder_block.append(self.activation)
-                decoder_block.append(nn.Dropout(self.dropout))
-        if self.num_layers == 1:
-            decoder_block.append(nn.Linear(self.output_dim, self.input_dim*self.sequence_length))
-        else:
-            decoder_block.append(nn.Linear(self.hidden_dim, self.input_dim*self.sequence_length))
-        decoder_block.append(self.activation)
-        self.decoder = nn.Sequential(*decoder_block)
+        # decoder_block = nn.ModuleList()
+        # if self.num_layers > 1:
+        #     decoder_block.append(nn.Linear(self.output_dim, hidden_dim))
+        #     decoder_block.append(self.activation)
+        #     decoder_block.append(nn.Dropout(self.dropout))
+        # if self.num_layers > 2:
+        #     for _ in range(self.num_layers-2):
+        #         decoder_block.append(nn.Linear(self.hidden_dim, self.hidden_dim))
+        #         decoder_block.append(self.activation)
+        #         decoder_block.append(nn.Dropout(self.dropout))
+        # if self.num_layers == 1:
+        #     decoder_block.append(nn.Linear(self.output_dim, self.input_dim*self.sequence_length))
+        # else:
+        #     decoder_block.append(nn.Linear(self.hidden_dim, self.input_dim*self.sequence_length))
+        # decoder_block.append(self.activation)
+        # self.decoder = nn.Sequential(*decoder_block)
+        self.dec_lin_in = nn.Linear(self.output_dim, self.output_dim)
+        self.dec_lstm = nn.LSTM(self.output_dim, self.input_dim, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
+        self.dec_lin_out = nn.Linear(self.input_dim, self.input_dim)
 
     def forward(self, data):
         return self.decode(self.encode(data))
@@ -150,13 +257,165 @@ class LSTMAutoencoder(Autoencoder):
         x = self.enc_lin_in(data)
         x = self.activation(x)
         x = self.enc_dropout(x)
-        x = self.enc_lstm(x)[0][:, -1]
+        x = self.enc_lstm(x)[0]#.reshape(-1, self.hidden_dim//2*self.sequence_length)
         x = self.enc_lin_out(x)
         x = self.activation(x)
         return x
 
     def decode(self, encoded):
-        return self.decoder(encoded).reshape(-1, self.sequence_length, self.input_dim)
+        x = self.dec_lin_in(encoded)
+        x = self.activation(x)
+        x = self.enc_dropout(x)
+        x = self.dec_lstm(x)[0]  # .reshape(-1, self.hidden_dim//2*self.sequence_length)
+        x = self.dec_lin_out(x)
+        x = self.activation(x)
+        return x
+        # return self.decoder(encoded)#.reshape(-1, self.sequence_length, self.input_dim)
+
+    def save(self, path):
+        path = '../trained_ae'
+        file = f'ae_{pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")}.pth'
+        # torch.save(save, os.path.join(path, file))
+
+
+class LSTMDoubleAutoencoder(Autoencoder):
+    def __init__(self, input_dim, output_dim, sequence_length, output_dim_2, hidden_dim=256, num_layers=3, dropout=0.1, activation=nn.Sigmoid(), **kwargs):
+        super(LSTMDoubleAutoencoder, self).__init__(input_dim, output_dim, hidden_dim, num_layers, dropout)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.activation = activation
+        self.sequence_length = sequence_length
+        self.output_dim_2 = output_dim_2
+
+        # encoder block 1
+        self.enc_lin_in = nn.Linear(self.input_dim, self.input_dim)
+        self.enc_lstm = nn.LSTM(self.input_dim, self.output_dim, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
+        self.enc_lin_out = nn.Linear(self.output_dim, self.output_dim)
+        self.enc_dropout = nn.Dropout(self.dropout)
+
+        # encoder block 2
+        self.enc_lin_in2 = nn.Linear(self.sequence_length, self.sequence_length)
+        self.enc_lstm2 = nn.LSTM(self.sequence_length, self.output_dim_2, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
+        self.enc_lin_out2 = nn.Linear(self.output_dim_2, self.output_dim_2)
+
+        # decoder block
+        # decoder_block = nn.ModuleList()
+        # if self.num_layers > 1:
+        #     decoder_block.append(nn.Linear(self.output_dim, hidden_dim))
+        #     decoder_block.append(self.activation)
+        #     decoder_block.append(nn.Dropout(self.dropout))
+        # if self.num_layers > 2:
+        #     for _ in range(self.num_layers-2):
+        #         decoder_block.append(nn.Linear(self.hidden_dim, self.hidden_dim))
+        #         decoder_block.append(self.activation)
+        #         decoder_block.append(nn.Dropout(self.dropout))
+        # if self.num_layers == 1:
+        #     decoder_block.append(nn.Linear(self.output_dim, self.input_dim*self.sequence_length))
+        # else:
+        #     decoder_block.append(nn.Linear(self.hidden_dim, self.input_dim*self.sequence_length))
+        # decoder_block.append(self.activation)
+        # self.decoder = nn.Sequential(*decoder_block)
+
+        # decoder block 2
+        self.dec_lin_in2 = nn.Linear(self.output_dim_2, self.output_dim_2)
+        self.dec_lstm2 = nn.LSTM(self.output_dim_2, self.sequence_length, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
+        self.dec_lin_out2 = nn.Linear(self.sequence_length, self.sequence_length)
+
+        # decoder block 1
+        self.dec_lin_in = nn.Linear(self.output_dim, self.output_dim)
+        self.dec_lstm = nn.LSTM(self.output_dim, self.input_dim, num_layers=self.num_layers, dropout=self.dropout, batch_first=True)
+        self.dec_lin_out = nn.Linear(self.input_dim, self.input_dim)
+
+    def forward(self, data):
+        return self.decode(self.encode(data))
+
+    def encode(self, data):
+        # encoder block 1
+        x = self.enc_lin_in(data)
+        x = self.activation(x)
+        x = self.enc_dropout(x)
+        x = self.enc_lstm(x)[0]#.reshape(-1, self.hidden_dim//2*self.sequence_length)
+        x = self.enc_lin_out(x)
+        x = self.activation(x)
+
+        # encoder block 2
+        x = self.enc_lin_in2(x.permute(0, 2, 1))
+        x = self.activation(x)
+        x = self.enc_dropout(x)
+        x = self.enc_lstm2(x)[0]#.reshape(-1, self.hidden_dim//2*self.sequence_length)
+        x = self.enc_lin_out2(x)
+        x = self.activation(x)
+        return x.permute(0, 2, 1)
+
+    def decode(self, encoded):
+        # decoder block 2
+        x = self.dec_lin_in2(encoded.permute(0, 2, 1))
+        x = self.activation(x)
+        x = self.enc_dropout(x)
+        x = self.dec_lstm2(x)[0]#.reshape(-1, self.hidden_dim//2*self.sequence_length)
+        x = self.dec_lin_out2(x)
+        x = self.activation(x)
+
+        # decoder block 1
+        x = self.dec_lin_in(x.permute(0, 2, 1))
+        x = self.activation(x)
+        x = self.enc_dropout(x)
+        x = self.dec_lstm(x)[0]  # .reshape(-1, self.hidden_dim//2*self.sequence_length)
+        x = self.dec_lin_out(x)
+        x = self.activation(x)
+        return x
+        # return self.decoder(encoded)#.reshape(-1, self.sequence_length, self.input_dim)
+
+    def save(self, path):
+        path = '../trained_ae'
+        file = f'ae_{pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")}.pth'
+        # torch.save(save, os.path.join(path, file))
+
+
+class LSTMTransformerAutoencoder(Autoencoder):
+    def __init__(self, input_dim, output_dim, hidden_dim=256, num_layers=3, dropout=0.1, **kwargs):
+        super(LSTMTransformerAutoencoder, self).__init__(input_dim, output_dim, hidden_dim, num_layers, dropout)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.tanh = nn.Tanh()
+
+        self.pe_enc = PositionalEncoder(batch_first=True, d_model=input_dim)
+        self.linear_enc_in = nn.Linear(input_dim, input_dim)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        self.enc_lstm = nn.LSTM(input_dim, output_dim, num_layers=1, dropout=dropout, batch_first=True)
+        self.linear_enc_out = nn.Linear(output_dim, output_dim)
+
+        self.pe_dec = PositionalEncoder(batch_first=True, d_model=output_dim)
+        self.linear_dec_in = nn.Linear(output_dim, output_dim)
+        self.decoder_layer = nn.TransformerEncoderLayer(d_model=output_dim, nhead=5, dim_feedforward=hidden_dim, dropout=dropout, batch_first=True)
+        self.decoder = nn.TransformerEncoder(self.decoder_layer, num_layers=num_layers)
+        self.dec_lstm = nn.LSTM(output_dim, input_dim, num_layers=1, dropout=dropout, batch_first=True)
+        self.linear_dec_out = nn.Linear(input_dim, input_dim)
+
+
+    def forward(self, data):
+        x = self.encode(data.to(self.device))
+        x = self.decode(x)
+        return x
+
+    def encode(self, data):
+        x = self.pe_enc(data)
+        x = self.linear_enc_in(x)
+        x = self.encoder(x)
+        x = self.enc_lstm(x)[0]
+        x = self.linear_enc_out(x)
+        x = self.tanh(x)
+        return x
+
+    def decode(self, encoded):
+        x = self.pe_dec(encoded)
+        x = self.linear_dec_in(x)
+        x = self.decoder(encoded)
+        x = self.dec_lstm(x)[0]
+        x = self.linear_dec_out(x)
+        x = self.tanh(x)
+        return x
 
     def save(self, path):
         path = '../trained_ae'
@@ -169,8 +428,9 @@ def train_model(model, dataloader, optimizer, criterion):
     total_loss = 0
     for batch in dataloader:
         optimizer.zero_grad()
-        inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
+        # inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
         # inputs = filter(inputs.detach().cpu().numpy(), win_len=random.randint(29, 50), dtype=torch.Tensor)
+        inputs = batch.float()
         outputs = model(inputs.to(model.device))
         loss = criterion(outputs, inputs)
         loss.backward()
@@ -184,7 +444,8 @@ def test_model(model, dataloader, criterion):
     total_loss = 0
     with torch.no_grad():
         for batch in dataloader:
-            inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
+            # inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
+            inputs = batch.float()
             outputs = model(inputs.to(model.device))
             loss = criterion(outputs, inputs)
             total_loss += loss.item()

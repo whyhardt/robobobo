@@ -321,8 +321,8 @@ class TransformerGenerator2(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.pe = PositionalEncoder(batch_first=True, d_model=latent_dim)
-        # self.linear_enc_in = nn.Linear(latent_dim, hidden_dim)
-        self.linear_enc_in = nn.LSTM(latent_dim, hidden_dim, batch_first=True, dropout=dropout, num_layers=2)
+        self.linear_enc_in = nn.Linear(latent_dim, hidden_dim)
+        # self.linear_enc_in = nn.LSTM(latent_dim, hidden_dim, batch_first=True, dropout=dropout, num_layers=2)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, dim_feedforward=hidden_dim,
                                                         dropout=dropout, batch_first=True)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)

@@ -72,11 +72,10 @@ class MultivariateTimeSeriesDataset(Dataset):
             print("Data standardized!")
 
         # normalize the data if required
-        # for i, d in enumerate(data):
-        #     if self.normalize:
-        #         min = d.min(dim=0)[0].reshape(1, -1)
-        #         max = d.max(dim=0)[0].reshape(1, -1)
-        #         data[i] = d - min / (max - min)
+        for i, d in enumerate(data):
+            if self.normalize:
+                batch_max = torch.abs(d).max(dim=0)[0]
+                data[i, :, batch_max!=0] = d[:, batch_max != 0] / batch_max[batch_max != 0]
 
         # convert the data another time
         data = torch.Tensor(data).float()

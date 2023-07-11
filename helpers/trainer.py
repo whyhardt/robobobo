@@ -245,7 +245,7 @@ class Trainer:
 
     def save_checkpoint(self, path_checkpoint=None, generated_samples=None, generator=None, discriminator=None):
         if path_checkpoint is None:
-            path_checkpoint = 'trained_models'+os.path.sep+'checkpoint.pt'
+            path_checkpoint = 'trained_models'+os.path.sep+'transformer_ae.pt'
         if generator is None:
             generator = self.generator
         if discriminator is None:
@@ -280,8 +280,8 @@ class Trainer:
         Therefore, there's no need for the saved samples."""
 
         print("Managing checkpoints...")
-        # save current model as checkpoint.pt
-        self.save_checkpoint(path_checkpoint=os.path.join(path_checkpoint, 'checkpoint.pt'), generator=generator, discriminator=discriminator)
+        # save current model as transformer_ae.pt
+        self.save_checkpoint(path_checkpoint=os.path.join(path_checkpoint, 'transformer_ae.pt'), generator=generator, discriminator=discriminator)
 
         for f in checkpoint_files:
             if os.path.exists(os.path.join(path_checkpoint, f)):

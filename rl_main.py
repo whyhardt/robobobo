@@ -16,6 +16,7 @@ import pandas as pd
 import torch
 from matplotlib import pyplot as plt
 
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO, SAC, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_checker import check_env
@@ -36,7 +37,7 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
+        'load_checkpoint': False,
         'file_checkpoint': 'trained_rl/ppocont142_6e6.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom142_2008_2022.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
@@ -44,7 +45,7 @@ if __name__ == '__main__':
 
         # training parameters
         'train': False,
-        'agent': 'ppo_cont',
+        'agent': 'rppo',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'num_epochs': 10,
         'num_actions_per_epoch': 1e3,
@@ -73,27 +74,30 @@ if __name__ == '__main__':
         'reward_scaling': 1e-4,
     }
 
-    list_valid_agents = ['sac', 'ddpg', 'td3', 'ppo_cont', 'ppo_disc']
+    list_valid_agents = ['sac', 'ddpg', 'td3', 'ppo_cont', 'ppo_disc', 'rppo']
     assert cfg['agent'] in list_valid_agents, f"Agent must be one of: {list_valid_agents}"
     # agent_dict structure:
     # key: agent name
     # value: (agent constructor, agent load function, bool: does agent support discrete actions?)
     agent_dict = {'sac': (lambda policy, env: SAC(policy, env, verbose=0, buffer_size=cfg['replay_buffer_size'], train_freq=cfg['parameter_update_interval'], gradient_steps=cfg['parameter_update_interval'],),
                           lambda path, env: SAC.load(path, env),
-                          False),
+                          False, False),
                   'ddpg': (lambda policy, env: DDPG(policy, env, verbose=0),
                            lambda path, env: DDPG.load(path, env),
-                           False),
+                           False, False),
                   'td3': (lambda policy, env: TD3(policy, env, verbose=0),
                           lambda path, env: TD3.load(path, env),
-                          False),
+                          False, False),
                   'ppo_cont': (lambda policy, env: PPO(policy, env, verbose=0),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
-                               False),
+                               False, False),
                   'ppo_disc': (lambda policy, env: PPO(policy, env, verbose=0),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
-                               True),
-                    }
+                               True, False),
+                  'rppo': (lambda policy, env: RecurrentPPO("MlpLstmPolicy", env, verbose=0),
+                           lambda path, env: RecurrentPPO.load(path, env, print_system_info=True),
+                           False, True),
+                 }
 
     print('Initializing framework...')
 
@@ -104,7 +108,7 @@ if __name__ == '__main__':
 
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2])
+        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2], recurrent=agent_dict[cfg['agent']][3])
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
         # It will check your custom environment and output additional warnings if needed
         check_env(env)
@@ -134,7 +138,7 @@ if __name__ == '__main__':
                 best_reward = avg_reward
                 agent.save("best_checkpoint.pt")
             if cfg['checkpoint_interval'] is not None and i % cfg['checkpoint_interval'] == 0:
-                agent.save("checkpoint.pt")
+                agent.save("transformer_ae.pt")
             print(f"Epoch {i+1}/{int(cfg['num_epochs'])}: avg_reward={avg_reward:.2f} +/- {avg_std:.2f}")
 
         # --------------------------------------------
@@ -154,7 +158,7 @@ if __name__ == '__main__':
 
     current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
     # path = os.path.join('trained_rl', f'{cfg["agent"]}_{cfg["env_id"]}_{current_time}')
-    path = os.path.join('trained_rl', f'checkpoint.pt')
+    path = os.path.join('trained_rl', f'transformer_ae.pt')
     agent.save(path)
     print(f"Agent saved to {path}")
 
@@ -163,7 +167,7 @@ if __name__ == '__main__':
     # --------------------------------------------
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,discrete_actions=agent_dict[cfg['agent']][2])
+        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,discrete_actions=agent_dict[cfg['agent']][2], recurrent=agent_dict[cfg['agent']][3])
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
