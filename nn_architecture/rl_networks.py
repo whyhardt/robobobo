@@ -1,9 +1,10 @@
-from typing import Optional
-
+from copy import deepcopy
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.policies import ActorCriticPolicy
 
 from nn_architecture.ae_networks import PositionalEncoder
 
@@ -287,7 +288,7 @@ class ValueRoboboboNetwork(ValueNetwork):
         return super(ValueRoboboboNetwork, self).forward(state)
 
 
-class AttnLSTMFeatureExtractor(BaseFeaturesExtractor):
+class BasicFeatureExtractor(BaseFeaturesExtractor):
     """
     This extractor is based on a transformer encoder with a follow-up LSTM.
     :param observation_space: (gym.Space)
@@ -295,8 +296,25 @@ class AttnLSTMFeatureExtractor(BaseFeaturesExtractor):
         This corresponds to the number of unit for the last layer.
     """
 
-    def __init__(self, observation_space: spaces.Box, features_dim: int = 256):
-        super().__init__(observation_space, features_dim)
+    def __init__(self, observation_space: spaces.Box, feature_dim: int = 256):
+        super().__init__(observation_space, feature_dim)
+
+        self.linear = nn.Linear(observation_space.shape[-1], feature_dim)
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        return self.linear(observations)
+
+
+class AttnLstmFeatureExtractor(BaseFeaturesExtractor):
+    """
+    This extractor is based on a transformer encoder with a follow-up LSTM.
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self, observation_space: spaces.Box, feature_dim: int = 256):
+        super().__init__(observation_space, feature_dim)
 
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[-1]
@@ -313,12 +331,190 @@ class AttnLSTMFeatureExtractor(BaseFeaturesExtractor):
 
         # lstm layer
         self.lstm_layer = nn.LSTM(n_input_channels*2, n_input_channels, batch_first=True, num_layers=3)
-        self.lin_out = nn.Linear(n_input_channels*10, features_dim)
+        self.lin_out = nn.Linear(n_input_channels*10, feature_dim)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         x = self.transformer(observations)
         x, _ = self.lstm_layer(x)
         return self.lin_out(x[:, -10:, :].reshape(x.shape[0], -1))
+
+
+class AttnNetworkOn(nn.Module):
+    """
+    Custom network for policy and value function.
+    It receives as input the features extracted by the features extractor.
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+        self,
+        feature_dim: int,
+        last_layer_dim_pi: int = 256,
+        last_layer_dim_vf: int = 256,
+    ):
+        super().__init__()
+
+        # IMPORTANT:
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = last_layer_dim_pi
+        self.latent_dim_vf = last_layer_dim_vf
+
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        assert feature_dim % 2 == 0, "Number of input channels must be even."
+
+        self.activation = nn.Tanh()
+
+        # transformer block
+        pos_encoder = PositionalEncoder(d_model=feature_dim, dropout=0.1)
+        # lin_in_layer = nn.Linear(feature_dim, feature_dim)
+        transformer_layer = nn.TransformerEncoderLayer(d_model=feature_dim, nhead=8)
+        norm_layer = nn.LayerNorm(feature_dim)
+        transformer_encoder = nn.TransformerEncoder(transformer_layer, num_layers=2, norm=norm_layer)
+        # lin_out_layer = nn.Linear(feature_dim * 2, feature_dim * 2)
+
+        # policy network
+        self.pi_transformer = nn.Sequential(pos_encoder, transformer_encoder)
+        # self.pi_lstm_layer = nn.LSTM(feature_dim * 2, feature_dim, batch_first=True, num_layers=3)
+        self.pi_lin_out = nn.Linear(feature_dim, last_layer_dim_pi)
+
+        # value network
+        self.vf_transformer = nn.Sequential(pos_encoder, transformer_encoder)
+        # self.vf_lstm_layer = nn.LSTM(feature_dim * 2, feature_dim, batch_first=True, num_layers=3)
+        self.vf_lin_out = nn.Linear(feature_dim, last_layer_dim_vf)
+
+    def forward(self, features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
+            If all layers are shared, then ``latent_policy == latent_value``
+        """
+        return self.forward_actor(features), self.forward_critic(features)
+
+    def forward_actor(self, features: torch.Tensor) -> torch.Tensor:
+        x = self.pi_transformer(features)
+        # x, _ = self.pi_lstm_layer(x)
+        return self.activation(self.pi_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+
+    def forward_critic(self, features: torch.Tensor) -> torch.Tensor:
+        x = self.vf_transformer(features)
+        # x, _ = self.vf_lstm_layer(x)
+        return self.activation(self.vf_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+
+
+class AttnActorCriticPolicyOn(ActorCriticPolicy):
+    def __init__(
+        self,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        lr_schedule: Callable[[float], float],
+        *args,
+        **kwargs,
+    ):
+        # Disable orthogonal initialization
+        kwargs["ortho_init"] = False
+        super().__init__(
+            observation_space,
+            action_space,
+            lr_schedule,
+            # Pass remaining arguments to base class
+            *args,
+            **kwargs,
+        )
+
+
+    def _build_mlp_extractor(self) -> None:
+        self.mlp_extractor = AttnNetworkOn(self.features_dim)
+
+
+class AttnLstmNetworkOn(nn.Module):
+    """
+    Custom network for policy and value function.
+    It receives as input the features extracted by the features extractor.
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+        self,
+        feature_dim: int,
+        last_layer_dim_pi: int = 256,
+        last_layer_dim_vf: int = 256,
+    ):
+        super().__init__()
+
+        # IMPORTANT:
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = last_layer_dim_pi
+        self.latent_dim_vf = last_layer_dim_vf
+
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        assert feature_dim % 2 == 0, "Number of input channels must be even."
+
+        self.activation = nn.Tanh()
+
+        # transformer block
+        pos_encoder = PositionalEncoder(d_model=feature_dim, dropout=0.1)
+        # lin_in_layer = nn.Linear(feature_dim, feature_dim * 2)
+        transformer_layer = nn.TransformerEncoderLayer(d_model=feature_dim, nhead=8)
+        norm_layer = nn.LayerNorm(feature_dim)
+        transformer_encoder = nn.TransformerEncoder(transformer_layer, num_layers=2, norm=norm_layer)
+        # lin_out_layer = nn.Linear(feature_dim * 2, feature_dim * 2)
+
+        # policy network
+        self.pi_transformer = nn.Sequential(deepcopy(pos_encoder), deepcopy(transformer_encoder))
+        self.pi_lstm_layer = nn.LSTM(feature_dim, feature_dim//2, batch_first=True, num_layers=3)
+        self.pi_lin_out = nn.Linear(feature_dim//2, last_layer_dim_pi)
+
+        # value network
+        self.vf_transformer = nn.Sequential(deepcopy(pos_encoder), deepcopy(transformer_encoder))
+        self.vf_lstm_layer = nn.LSTM(feature_dim, feature_dim//2, batch_first=True, num_layers=3)
+        self.vf_lin_out = nn.Linear(feature_dim//2, last_layer_dim_vf)
+
+    def forward(self, features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
+            If all layers are shared, then ``latent_policy == latent_value``
+        """
+        return self.forward_actor(features), self.forward_critic(features)
+
+    def forward_actor(self, features: torch.Tensor) -> torch.Tensor:
+        x = self.pi_transformer(features)
+        x, _ = self.pi_lstm_layer(x)
+        return self.activation(self.pi_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+
+    def forward_critic(self, features: torch.Tensor) -> torch.Tensor:
+        x = self.vf_transformer(features)
+        x, _ = self.vf_lstm_layer(x)
+        return self.activation(self.vf_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+
+
+class AttnLstmActorCriticPolicyOn(ActorCriticPolicy):
+    def __init__(
+        self,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        lr_schedule: Callable[[float], float],
+        *args,
+        **kwargs,
+    ):
+        # Disable orthogonal initialization
+        kwargs["ortho_init"] = False
+        super().__init__(
+            observation_space,
+            action_space,
+            lr_schedule,
+            # Pass remaining arguments to base class
+            *args,
+            **kwargs,
+        )
+
+
+    def _build_mlp_extractor(self) -> None:
+        self.mlp_extractor = AttnLstmNetworkOn(self.features_dim)
 
 
 

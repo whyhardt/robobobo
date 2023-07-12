@@ -25,7 +25,8 @@ from stable_baselines3.common.env_checker import check_env
 from utils.ae_dataloader import create_dataloader
 from training import simple_train, test
 from environment import Environment
-from nn_architecture.rl_networks import AttnLSTMFeatureExtractor
+from nn_architecture.rl_networks import AttnLstmFeatureExtractor, AttnLstmActorCriticPolicyOn, BasicFeatureExtractor, \
+    AttnActorCriticPolicyOn
 
 import gymnasium as gym
 from gymnasium.wrappers import TimeLimit
@@ -45,9 +46,10 @@ if __name__ == '__main__':
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': True,
+        'train': False,
         'agent': 'ppo_cont',
-        'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
+        'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
+        'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
         'recurrent': True,
         'num_epochs': 2,
         'num_actions_per_epoch': 1e3,
@@ -76,29 +78,43 @@ if __name__ == '__main__':
         'reward_scaling': 1e-4,
     }
 
+    # make checks
+    valid_policies = ['MlpPolicy', 'Attn', 'AttnLstm']
+    assert cfg['policy'] in valid_policies, f"Policy must be one of: {valid_policies}"
+
+    if not cfg['recurrent'] and cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm':
+        cfg['recurrent'] = True
+        print('Recurrent policy selected, setting recurrent to True')
+
     list_valid_agents = ['sac', 'ddpg', 'td3', 'ppo_cont', 'ppo_disc', 'rppo']
     assert cfg['agent'] in list_valid_agents, f"Agent must be one of: {list_valid_agents}"
+
     # agent_dict structure:
     # key: agent name
     # value: (agent constructor, agent load function, bool: does agent support discrete actions?)
-    agent_dict = {'sac': (lambda env, policy_kwargs: SAC('MlpPolicy', env, policy_kwargs=policy_kwargs, buffer_size=cfg['replay_buffer_size'], train_freq=cfg['parameter_update_interval'], gradient_steps=cfg['parameter_update_interval'],),
+    agent_dict = {'sac': (lambda policy, env, policy_kwargs: SAC(policy, env,
+                                                                 policy_kwargs=policy_kwargs,
+                                                                 buffer_size=cfg['replay_buffer_size'],
+                                                                 train_freq=cfg['parameter_update_interval'],
+                                                                 gradient_steps=cfg['parameter_update_interval'],),
                           lambda path, env: SAC.load(path, env),
-                          False, False),
-                  'ddpg': (lambda env, policy_kwargs: DDPG('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
+                          False),
+                  'ddpg': (lambda policy, env, policy_kwargs: DDPG(policy, env, policy_kwargs=policy_kwargs),
                            lambda path, env: DDPG.load(path, env),
-                           False, False),
-                  'td3': (lambda env, policy_kwargs: TD3('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
+                           False),
+                  'td3': (lambda policy, env, policy_kwargs: TD3(policy, env, policy_kwargs=policy_kwargs),
                           lambda path, env: TD3.load(path, env),
-                          False, False),
-                  'ppo_cont': (lambda env, policy_kwargs: PPO('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
+                          False),
+                  'ppo_cont': (lambda policy, env, policy_kwargs: PPO(policy, env,
+                                                              policy_kwargs=policy_kwargs),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
-                               False, False),
-                  'ppo_disc': (lambda env, policy_kwargs: PPO('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
+                               False),
+                  'ppo_disc': (lambda policy, env, policy_kwargs: PPO(policy, env, policy_kwargs=policy_kwargs),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
-                               True, False),
-                  'rppo': (lambda env, policy_kwargs: RecurrentPPO("MlpLstmPolicy", env, policy_kwargs=policy_kwargs, verbose=0),
+                               True),
+                  'rppo': (lambda policy, env, policy_kwargs: RecurrentPPO("MlpLstmPolicy", env, policy_kwargs=policy_kwargs),
                            lambda path, env: RecurrentPPO.load(path, env, print_system_info=True),
-                           False, True),
+                           False),
                  }
 
     print('Initializing framework...')
@@ -118,18 +134,35 @@ if __name__ == '__main__':
         env = gym.make(cfg['env_id'], render_mode="human")
 
     # custom network architecture and features extractor
+    if cfg['policy'] == 'Attn':
+        policy = AttnActorCriticPolicyOn
+    elif cfg['policy'] == 'AttnLstm':
+        policy = AttnLstmActorCriticPolicyOn
+    else:
+        # if cfg['policy'] == 'MlpPolicy'
+        policy = 'MlpPolicy'
+
+    if cfg['policy'] == 'MlpPolicy' and cfg['recurrent']:
+        feature_extractor = AttnLstmFeatureExtractor
+    elif cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm' and cfg['recurrent']:
+        feature_extractor = BasicFeatureExtractor
+    else:
+        feature_extractor = None
+
     feature_dim = 1024
     net_arch = dict(pi=[feature_dim, feature_dim // 2, 64], vf=[feature_dim, feature_dim // 2, 64])
-    policy_kwargs = dict(
-        features_extractor_class=AttnLSTMFeatureExtractor,
-        features_extractor_kwargs=dict(features_dim=feature_dim),
-        net_arch=net_arch,
-    )
+    if feature_extractor is not None:
+        policy_kwargs = dict(
+            features_extractor_class=feature_extractor,
+            features_extractor_kwargs=dict(feature_dim=feature_dim),
+        )
+    else:
+        policy_kwargs = None
 
     # load agent
     if not cfg['load_checkpoint']:
-        agent = agent_dict[cfg['agent']][0](env, policy_kwargs)
-        print(f"Agent {cfg['agent']} initialized!")
+        agent = agent_dict[cfg['agent']][0](policy, env, policy_kwargs)
+        print(f"Agent configuration:\nType:\t\t\t{cfg['agent']}\nPolicy:\t\t\t{cfg['policy']}\nRecurrent:\t\t{cfg['recurrent']}\nEnvironment:\t{cfg['env_id']}\n")
     else:
         agent = agent_dict[cfg['agent']][1](cfg['file_checkpoint'], env)
         print(f"Agent {cfg['agent']} from path {cfg['file_checkpoint']} loaded!")
@@ -163,15 +196,15 @@ if __name__ == '__main__':
         plt.ylabel('Average reward')
         plt.show()
 
-    # --------------------------------------------
-    # save agent
-    # --------------------------------------------
+        # --------------------------------------------
+        # save agent
+        # --------------------------------------------
 
-    current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
-    # path = os.path.join('trained_rl', f'{cfg["agent"]}_{cfg["env_id"]}_{current_time}')
-    path = os.path.join('trained_rl', f'transformer_ae.pt')
-    agent.save(path)
-    print(f"Agent saved to {path}")
+        current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+        # path = os.path.join('trained_rl', f'{cfg["agent"]}_{cfg["env_id"]}_{current_time}')
+        path = os.path.join('trained_rl', f'checkpoint.pt')
+        agent.save(path)
+        print(f"Agent saved to {path}")
 
     # --------------------------------------------
     # test RL framework

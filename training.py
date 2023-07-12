@@ -122,7 +122,7 @@ def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot
 
     print(f"\nTest scenario (deterministic={deterministic}) started.")
     while not done and not truncated:
-        # print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
+        print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
         action = agent.predict(state, deterministic=deterministic)[0]
         state, _, done, truncated, _ = env.step(action)
         # if len(rewards) > 1 and np.abs(rewards[-1] - env.total_equity().item()) > 1e4:
@@ -135,7 +135,7 @@ def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot
             print("Cash is zero.")
             if np.sum(portfolio[-2]) - np.sum(portfolio[-1]) != 0:
                 print("Warning: Portfolio changed although cash is zero.")
-    print(f"Test scenario terminated. Total reward: {np.round(np.sum(np.diff(rewards)), 2)}\n")
+    print(f"Test scenario terminated. Total reward: {rewards[-1]}\n")
     env.close()
 
     rewards = np.array(rewards).reshape(len(rewards), -1)
