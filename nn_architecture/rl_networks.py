@@ -308,17 +308,17 @@ class AttnLSTMFeatureExtractor(BaseFeaturesExtractor):
         transformer_layer = nn.TransformerEncoderLayer(d_model=n_input_channels*2, nhead=7)
         norm_layer = nn.LayerNorm(n_input_channels*2)
         transformer_encoder = nn.TransformerEncoder(transformer_layer, num_layers=2, norm=norm_layer)
-        lin_out_layer = nn.Linear(n_input_channels*2, n_input_channels)
+        lin_out_layer = nn.Linear(n_input_channels*2, n_input_channels*2)
         self.transformer = nn.Sequential(pos_encoder, lin_in_layer, transformer_encoder, lin_out_layer)
 
         # lstm layer
-        self.lstm_layer = nn.LSTM(n_input_channels, n_input_channels, batch_first=True, num_layers=3)
-        self.lin_out = nn.Linear(n_input_channels, features_dim)
+        self.lstm_layer = nn.LSTM(n_input_channels*2, n_input_channels, batch_first=True, num_layers=3)
+        self.lin_out = nn.Linear(n_input_channels*10, features_dim)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         x = self.transformer(observations)
         x, _ = self.lstm_layer(x)
-        return self.lin_out(x[:, -1, :])
+        return self.lin_out(x[:, -10:, :].view(x.shape[0], -1))
 
 
 

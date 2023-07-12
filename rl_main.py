@@ -179,4 +179,4 @@ if __name__ == '__main__':
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
-    simple_test(env, agent, deterministic=False)
+    simple_test(env, agent, deterministic=True)
