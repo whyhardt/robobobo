@@ -395,12 +395,12 @@ class AttnNetworkOn(nn.Module):
     def forward_actor(self, features: torch.Tensor) -> torch.Tensor:
         x = self.pi_transformer(features)
         # x, _ = self.pi_lstm_layer(x)
-        return self.activation(self.pi_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+        return self.activation(self.pi_lin_out(x[:, -1:, :])).squeeze(1)#.reshape(x.shape[0], -1)))
 
     def forward_critic(self, features: torch.Tensor) -> torch.Tensor:
         x = self.vf_transformer(features)
         # x, _ = self.vf_lstm_layer(x)
-        return self.activation(self.vf_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+        return self.activation(self.vf_lin_out(x[:, -1:, :])).squeeze(1)#.reshape(x.shape[0], -1)))
 
 
 class AttnActorCriticPolicyOn(ActorCriticPolicy):
@@ -484,12 +484,12 @@ class AttnLstmNetworkOn(nn.Module):
     def forward_actor(self, features: torch.Tensor) -> torch.Tensor:
         x = self.pi_transformer(features)
         x, _ = self.pi_lstm_layer(x)
-        return self.activation(self.pi_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+        return self.activation(self.pi_lin_out(x[:, -1:, :])).squeeze(1)#.reshape(x.shape[0], -1)))
 
     def forward_critic(self, features: torch.Tensor) -> torch.Tensor:
         x = self.vf_transformer(features)
         x, _ = self.vf_lstm_layer(x)
-        return self.activation(self.vf_lin_out(x[:, -1:, :]))#.reshape(x.shape[0], -1)))
+        return self.activation(self.vf_lin_out(x[:, -1:, :])).squeeze(1)#.reshape(x.shape[0], -1)))
 
 
 class AttnLstmActorCriticPolicyOn(ActorCriticPolicy):

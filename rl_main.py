@@ -45,10 +45,10 @@ if __name__ == '__main__':
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': False,
+        'train': True,
         'agent': 'ppo_cont',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
+        'policy': 'Attn',  # MlpPolicy, Attn, AttnLstm
         'recurrent': True,
         'num_epochs': 2,
         'num_actions_per_epoch': 1e3,
