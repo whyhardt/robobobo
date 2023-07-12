@@ -8,8 +8,8 @@ import torch.multiprocessing as mp
 from helpers.trainer import Trainer
 from helpers.get_master import find_free_port
 from helpers.ddp_training import run, DDPTrainer
-from nn_architecture.models import TransformerGenerator, TransformerDiscriminator, TtsDiscriminator
-from nn_architecture.autoencoder import TransformerAutoencoder
+from nn_architecture.gan_networks import TransformerGenerator, TransformerDiscriminator, TtsDiscriminator
+from nn_architecture.ae_networks import TransformerAutoencoder
 from utils.ae_dataloader import create_dataloader
 from helpers import system_inputs
 

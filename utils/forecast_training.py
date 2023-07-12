@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-from nn_architecture.models import TransformerGenerator
-from nn_architecture.autoencoder import TransformerAutoencoder
+from nn_architecture.gan_networks import TransformerGenerator
+from nn_architecture.ae_networks import TransformerAutoencoder
 from utils.ae_dataloader import create_dataloader
 from utils.get_filter import moving_average
 

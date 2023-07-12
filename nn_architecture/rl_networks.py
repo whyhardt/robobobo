@@ -2,6 +2,11 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+from gymnasium import spaces
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+
+from nn_architecture.ae_networks import PositionalEncoder
+
 
 class ValueNetwork(nn.Module):
     """Class of value network that resembles the critic"""
@@ -280,6 +285,41 @@ class ValueRoboboboNetwork(ValueNetwork):
                 state[i] = state[i].reshape(state[i].shape[0], -1).to(self.device)
         state = torch.concat(state, dim=1)
         return super(ValueRoboboboNetwork, self).forward(state)
+
+
+class AttnLSTMFeatureExtractor(BaseFeaturesExtractor):
+    """
+    This extractor is based on a transformer encoder with a follow-up LSTM.
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self, observation_space: spaces.Box, features_dim: int = 256):
+        super().__init__(observation_space, features_dim)
+
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        n_input_channels = observation_space.shape[-1]
+        assert n_input_channels % 2 == 0, "Number of input channels must be even."
+
+        # transformer layer
+        pos_encoder = PositionalEncoder(d_model=n_input_channels, dropout=0.1)
+        lin_in_layer = nn.Linear(n_input_channels, n_input_channels*2)
+        transformer_layer = nn.TransformerEncoderLayer(d_model=n_input_channels*2, nhead=7)
+        norm_layer = nn.LayerNorm(n_input_channels*2)
+        transformer_encoder = nn.TransformerEncoder(transformer_layer, num_layers=2, norm=norm_layer)
+        lin_out_layer = nn.Linear(n_input_channels*2, n_input_channels)
+        self.transformer = nn.Sequential(pos_encoder, lin_in_layer, transformer_encoder, lin_out_layer)
+
+        # lstm layer
+        self.lstm_layer = nn.LSTM(n_input_channels, n_input_channels, batch_first=True)
+        self.lin_out = nn.Linear(n_input_channels, features_dim)
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        x = self.transformer(observations)
+        x, _ = self.lstm_layer(x)
+        return self.lin_out(x[:, -1, :])
+
 
 
 # class TemperatureNetwork(nn.Module):

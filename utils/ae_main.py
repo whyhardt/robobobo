@@ -8,7 +8,7 @@ import torch
 
 from utils.ae_dataloader import create_dataloader
 from utils.get_filter import moving_average as filter
-from nn_architecture.autoencoder import LSTMDoubleAutoencoder, TransformerAutoencoder, save, train, \
+from nn_architecture.ae_networks import LSTMDoubleAutoencoder, TransformerAutoencoder, save, train, \
     LSTMTransformerAutoencoder, TransformerDoubleAutoencoder
 
 if __name__ == '__main__':

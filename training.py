@@ -155,6 +155,7 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         axs[0].set_ylim([0, np.max(rewards/rewards[0])*1.1])
         axs[0].legend()
         axs[0].grid()
+        axs[0].set_ylim([0, 20])
 
         axs[1].plot(actions_mean, label='actions')
         axs[1].fill_between(np.arange(len(actions_mean)), actions_mean-actions_std, actions_mean+actions_std, alpha=0.2)

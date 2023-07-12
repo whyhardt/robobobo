@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 from torch import nn
 
-from nn_architecture import models, autoencoder
+from nn_architecture import gan_networks, ae_networks
 from utils.ae_dataloader import create_dataloader
 
 if __name__=='__main__':

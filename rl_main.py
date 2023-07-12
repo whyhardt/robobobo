@@ -25,6 +25,7 @@ from stable_baselines3.common.env_checker import check_env
 from utils.ae_dataloader import create_dataloader
 from training import simple_train, simple_test
 from environment import Environment
+from nn_architecture.rl_networks import AttnLSTMFeatureExtractor
 
 import gymnasium as gym
 from gymnasium.wrappers import TimeLimit
@@ -38,15 +39,16 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/ppocont142_6e6.pt',
-        'file_data': os.path.join('stock_data', 'portfolio_custom142_2008_2022.csv'),
+        'file_checkpoint': 'trained_rl/rppo142_45e5.pt',
+        'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'checkpoint_interval': 10,
 
         # training parameters
         'train': False,
-        'agent': 'rppo',
+        'agent': 'ppo_cont',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
+        'recurrent': True,
         'num_epochs': 10,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
@@ -79,22 +81,22 @@ if __name__ == '__main__':
     # agent_dict structure:
     # key: agent name
     # value: (agent constructor, agent load function, bool: does agent support discrete actions?)
-    agent_dict = {'sac': (lambda policy, env: SAC(policy, env, verbose=0, buffer_size=cfg['replay_buffer_size'], train_freq=cfg['parameter_update_interval'], gradient_steps=cfg['parameter_update_interval'],),
+    agent_dict = {'sac': (lambda env, policy_kwargs: SAC('MlpPolicy', env, policy_kwargs=policy_kwargs, buffer_size=cfg['replay_buffer_size'], train_freq=cfg['parameter_update_interval'], gradient_steps=cfg['parameter_update_interval'],),
                           lambda path, env: SAC.load(path, env),
                           False, False),
-                  'ddpg': (lambda policy, env: DDPG(policy, env, verbose=0),
+                  'ddpg': (lambda env, policy_kwargs: DDPG('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
                            lambda path, env: DDPG.load(path, env),
                            False, False),
-                  'td3': (lambda policy, env: TD3(policy, env, verbose=0),
+                  'td3': (lambda env, policy_kwargs: TD3('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
                           lambda path, env: TD3.load(path, env),
                           False, False),
-                  'ppo_cont': (lambda policy, env: PPO(policy, env, verbose=0),
+                  'ppo_cont': (lambda env, policy_kwargs: PPO('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
                                False, False),
-                  'ppo_disc': (lambda policy, env: PPO(policy, env, verbose=0),
+                  'ppo_disc': (lambda env, policy_kwargs: PPO('MlpPolicy', env, policy_kwargs=policy_kwargs, verbose=0),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
                                True, False),
-                  'rppo': (lambda policy, env: RecurrentPPO("MlpLstmPolicy", env, verbose=0),
+                  'rppo': (lambda env, policy_kwargs: RecurrentPPO("MlpLstmPolicy", env, policy_kwargs=policy_kwargs, verbose=0),
                            lambda path, env: RecurrentPPO.load(path, env, print_system_info=True),
                            False, True),
                  }
@@ -108,16 +110,22 @@ if __name__ == '__main__':
 
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2], recurrent=agent_dict[cfg['agent']][3])
+        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg["recurrent"])
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
         # It will check your custom environment and output additional warnings if needed
         check_env(env)
     else:
         env = gym.make(cfg['env_id'], render_mode="human")
 
+    # features extractor
+    policy_kwargs = dict(
+        features_extractor_class=AttnLSTMFeatureExtractor,
+        features_extractor_kwargs=dict(features_dim=env.observation_space.shape[-1]),
+    )
+
     # load agent
     if not cfg['load_checkpoint']:
-        agent = agent_dict[cfg['agent']][0]('MlpPolicy', env)
+        agent = agent_dict[cfg['agent']][0](env, policy_kwargs)
         print(f"Agent {cfg['agent']} initialized!")
     else:
         agent = agent_dict[cfg['agent']][1](cfg['file_checkpoint'], env)
@@ -167,8 +175,8 @@ if __name__ == '__main__':
     # --------------------------------------------
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,discrete_actions=agent_dict[cfg['agent']][2], recurrent=agent_dict[cfg['agent']][3])
+        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg['recurrent'])
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
-    simple_test(env, agent, deterministic=True)
+    simple_test(env, agent, deterministic=False)

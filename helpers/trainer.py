@@ -3,7 +3,7 @@ import os
 import torch
 import numpy as np
 
-from nn_architecture import losses, models
+from nn_architecture import losses, gan_networks
 from nn_architecture.losses import WassersteinGradientPenaltyLoss as Loss
 
 # https://machinelearningmastery.com/how-to-implement-wasserstein-loss-for-generative-adversarial-networks/
