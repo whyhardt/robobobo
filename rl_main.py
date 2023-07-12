@@ -25,8 +25,7 @@ from stable_baselines3.common.env_checker import check_env
 from utils.ae_dataloader import create_dataloader
 from training import simple_train, test
 from environment import Environment
-from nn_architecture.rl_networks import AttnLstmFeatureExtractor, AttnLstmActorCriticPolicyOn, BasicFeatureExtractor, \
-    AttnActorCriticPolicyOn
+from nn_architecture.rl_networks import *
 
 import gymnasium as gym
 from gymnasium.wrappers import TimeLimit

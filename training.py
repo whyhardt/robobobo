@@ -122,7 +122,7 @@ def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot
 
     print(f"\nTest scenario (deterministic={deterministic}) started.")
     while not done and not truncated:
-        print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
+        # print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
         action = agent.predict(state, deterministic=deterministic)[0]
         state, _, done, truncated, _ = env.step(action)
         # if len(rewards) > 1 and np.abs(rewards[-1] - env.total_equity().item()) > 1e4:
