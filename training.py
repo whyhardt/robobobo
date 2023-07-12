@@ -110,7 +110,7 @@ def simple_train(
     return np.array(episode_rewards, dtype=np.float32), agent
 
 
-def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot_reference=False):
+def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot_reference=False):
     """Test trained SAC agent"""
     done = False
     truncated = False
@@ -125,6 +125,8 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         # print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
         action = agent.predict(state, deterministic=deterministic)[0]
         state, _, done, truncated, _ = env.step(action)
+        # if len(rewards) > 1 and np.abs(rewards[-1] - env.total_equity().item()) > 1e4:
+        #     print("Warning: Total equity changed by more than 1000. Maybe somethings wrong")
         rewards.append(copy.deepcopy(env.total_equity().item()))
         actions.append(copy.deepcopy(action))
         portfolio.append(copy.deepcopy(env.portfolio))
@@ -155,7 +157,6 @@ def simple_test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=Tru
         axs[0].set_ylim([0, np.max(rewards/rewards[0])*1.1])
         axs[0].legend()
         axs[0].grid()
-        axs[0].set_ylim([0, 20])
 
         axs[1].plot(actions_mean, label='actions')
         axs[1].fill_between(np.arange(len(actions_mean)), actions_mean-actions_std, actions_mean+actions_std, alpha=0.2)

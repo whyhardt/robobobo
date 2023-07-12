@@ -23,7 +23,7 @@ from stable_baselines3.common.env_checker import check_env
 
 # from nn_architecture.agents import SACAgent, DDPGAgent, TD3Agent
 from utils.ae_dataloader import create_dataloader
-from training import simple_train, simple_test
+from training import simple_train, test
 from environment import Environment
 from nn_architecture.rl_networks import AttnLSTMFeatureExtractor
 
@@ -45,11 +45,11 @@ if __name__ == '__main__':
         'checkpoint_interval': 10,
 
         # training parameters
-        'train': False,
+        'train': True,
         'agent': 'ppo_cont',
         'env_id': "Custom",  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'recurrent': True,
-        'num_epochs': 10,
+        'num_epochs': 2,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,
@@ -117,10 +117,13 @@ if __name__ == '__main__':
     else:
         env = gym.make(cfg['env_id'], render_mode="human")
 
-    # features extractor
+    # custom network architecture and features extractor
+    feature_dim = 1024
+    net_arch = dict(pi=[feature_dim, feature_dim // 2, 64], vf=[feature_dim, feature_dim // 2, 64])
     policy_kwargs = dict(
         features_extractor_class=AttnLSTMFeatureExtractor,
-        features_extractor_kwargs=dict(features_dim=env.observation_space.shape[-1]),
+        features_extractor_kwargs=dict(features_dim=feature_dim),
+        net_arch=net_arch,
     )
 
     # load agent
@@ -179,4 +182,4 @@ if __name__ == '__main__':
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
-    simple_test(env, agent, deterministic=True)
+    test(env, agent, deterministic=True)

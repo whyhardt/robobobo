@@ -106,6 +106,9 @@ class Environment(gym.Env):
         # compute buy amounts in dollars for share amounts as integers
         buy_amounts = buy_amounts_share * self.stock_data[self.t, index_buy]  # Unit check: [share * ($/share) = $]
 
+        # check if portfolio would change insanely
+        # if np.sum(buy_amounts_share) > 1e4:
+        #     print("Portfolio would change insanely!")
         # update cash and portfolio after buy orders
         if self.cash >= np.sum(buy_amounts) + np.sum(buy_amounts*self._commission_buy):
             self.cash -= np.sum(buy_amounts) - np.sum(buy_amounts*self._commission_buy)

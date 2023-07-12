@@ -318,7 +318,7 @@ class AttnLSTMFeatureExtractor(BaseFeaturesExtractor):
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         x = self.transformer(observations)
         x, _ = self.lstm_layer(x)
-        return self.lin_out(x[:, -10:, :].view(x.shape[0], -1))
+        return self.lin_out(x[:, -10:, :].reshape(x.shape[0], -1))
 
 
 
