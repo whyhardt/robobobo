@@ -18,7 +18,7 @@ if __name__ == '__main__':
     training = True
 
     model_dict = None
-    model_name = 'double_transformer_ae.pt'
+    model_name = 'transformer_ae.pt'
     model_dir = '../trained_ae'
 
     data_dir = '../stock_data'
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         },
         "training": {
             "lr":           1e-4,
-            "epochs":       50,
+            "epochs":       10,
         },
         "general": {
             "seq_len":          20,
@@ -68,8 +68,8 @@ if __name__ == '__main__':
     if cfg["model"]["input_dim"] is None:
         cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[-1]
     # model = LSTMDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
-    model = TransformerDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
-    # model = LSTMTransformerAutoencoder(**cfg["model"])
+    # model = TransformerDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
+    model = TransformerAutoencoder(**cfg["model"])
     if cfg["model"]["state_dict"] is not None:
         model.load_state_dict(cfg["model"]["state_dict"])
         print("Loaded model state dict!")

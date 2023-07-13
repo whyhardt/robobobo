@@ -1,5 +1,6 @@
 # Description: Environment for the stock trading agent. Inherits from gym.Env.
 from copy import deepcopy
+from typing import Optional
 
 import gymnasium as gym
 import numpy as np
@@ -7,6 +8,8 @@ import torch
 from matplotlib import pyplot as plt
 
 from stable_baselines3.common.env_checker import check_env
+
+from nn_architecture.ae_networks import Autoencoder
 
 
 class Environment(gym.Env):
@@ -21,7 +24,12 @@ class Environment(gym.Env):
                  time_limit=-1,
                  discrete_actions=True,
                  recurrent=False,
+                 # optional parameters
+                 encoder: Optional[Autoencoder] = None,
                  ):
+
+        # set encoder first, since it defines the observation space
+        self.encoder = encoder
 
         # set action and observation space
         # shape of action space: ([sell (=0) or buy (=1)]*[stock1, stock2, ...])
@@ -29,11 +37,16 @@ class Environment(gym.Env):
             self.action_space = gym.spaces.MultiBinary(stock_data.shape[-1])
         else:
             self.action_space = gym.spaces.Box(low=-1, high=1, shape=(stock_data.shape[-1],), dtype=np.float32)
+
         # shape of observation space: (cash, portfolio, stock_prices)
         if recurrent:
             self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(observation_length + 2, stock_data.shape[-1]), dtype=np.float32)
         else:
-            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1, 1+stock_data.shape[-1]+stock_data.shape[-1]*observation_length), dtype=np.float32)
+            if self.encoder is not None:
+                obs_shape = (1, 1+stock_data.shape[-1]+self.encoder.output_dim)
+            else:
+                obs_shape = (1, 1+stock_data.shape[-1]+stock_data.shape[-1]*observation_length)
+            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32)
 
         # set data
         self._dataset = stock_data  # whole training dataset
@@ -161,12 +174,19 @@ class Environment(gym.Env):
         stock_prices[np.isnan(stock_prices)] = 0
         if not self._recurrent:
             stock_prices = np.reshape(stock_prices, (-1,))
-            return np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
+            obs = np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
         else:
             # obs_space = np.concatenate((portfolio, stock_prices), axis=1)
             cash = np.tile(cash, (1, stock_prices.shape[-1]))
             # portfolio = np.tile(portfolio, (self.observation_length, 1))
-            return np.concatenate((cash, portfolio.reshape(1, -1), stock_prices), axis=0, dtype=np.float32)
+            obs = np.concatenate((cash, portfolio.reshape(1, -1), stock_prices), axis=0, dtype=np.float32)
+
+        if self.encoder is not None:
+            obs_stocks = obs[:, 1 + self.stock_data.shape[-1]:].reshape(1, self.observation_length, self.stock_data.shape[-1])
+            obs_stocks = self.encode(torch.tensor(obs_stocks, dtype=torch.float32)).detach().numpy()
+            obs = np.concatenate((obs[:, :1 + self.stock_data.shape[-1]], obs_stocks), axis=1)
+
+        return obs
 
     def reward(self, reward_scaling=False):
         # Calculate reward for the current action
@@ -203,3 +223,6 @@ class Environment(gym.Env):
         # Calculate total equity
         # Total equity is defined as the sum of cash and the value of all shares
         return self.cash + np.sum(self.portfolio * self.stock_data[self.t])
+
+    def encode(self, x):
+        return self.encoder.encode(x)

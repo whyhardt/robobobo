@@ -26,6 +26,7 @@ from utils.ae_dataloader import create_dataloader
 from training import simple_train, test
 from environment import Environment
 from nn_architecture.rl_networks import *
+from nn_architecture.ae_networks import TransformerAutoencoder
 
 import gymnasium as gym
 from gymnasium.wrappers import TimeLimit
@@ -42,14 +43,15 @@ if __name__ == '__main__':
         'file_checkpoint': 'trained_rl/rppo142_45e5.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
+        'file_ae': 'trained_ae/transformer_ae_v1.pt',
         'checkpoint_interval': 10,
 
         # training parameters
         'train': True,
         'agent': 'ppo_cont',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
-        'policy': 'Attn',  # MlpPolicy, Attn, AttnLstm
-        'recurrent': True,
+        'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
+        'recurrent': False,
         'num_epochs': 2,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
@@ -104,8 +106,7 @@ if __name__ == '__main__':
                   'td3': (lambda policy, env, policy_kwargs: TD3(policy, env, policy_kwargs=policy_kwargs),
                           lambda path, env: TD3.load(path, env),
                           False),
-                  'ppo_cont': (lambda policy, env, policy_kwargs: PPO(policy, env,
-                                                              policy_kwargs=policy_kwargs),
+                  'ppo_cont': (lambda policy, env, policy_kwargs: PPO(policy, env, policy_kwargs=policy_kwargs),
                                lambda path, env: PPO.load(path, env, print_system_info=True),
                                False),
                   'ppo_disc': (lambda policy, env, policy_kwargs: PPO(policy, env, policy_kwargs=policy_kwargs),
@@ -125,7 +126,13 @@ if __name__ == '__main__':
 
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'], time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg["recurrent"])
+        state_dict = torch.load(cfg['file_ae'], map_location=torch.device('cpu'))
+        encoder = TransformerAutoencoder(**state_dict['model'], seq_len=state_dict['general']['seq_len'])
+        encoder.load_state_dict(state_dict['model']['state_dict'])
+        encoder.eval()
+        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'],
+                          time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2],
+                          recurrent=cfg["recurrent"], encoder=encoder)
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
         # It will check your custom environment and output additional warnings if needed
         check_env(env)
