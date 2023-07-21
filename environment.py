@@ -22,7 +22,7 @@ class Environment(gym.Env):
                  reward_scaling=1e-4,
                  random_splits=True,
                  time_limit=-1,
-                 discrete_actions=True,
+                 discrete_actions=False,
                  recurrent=False,
                  # optional parameters
                  encoder: Optional[Autoencoder] = None,
@@ -59,7 +59,7 @@ class Environment(gym.Env):
         self.portfolio = np.zeros((stock_data.shape[1],))
         self.observation_length = observation_length
 
-        self._time_limit = time_limit
+        self._time_limit = time_limit #if time_limit > 0 else len(stock_data)-1
         self._commission_sell = commission_sell
         self._commission_buy = commission_buy
         self._reward_scaling = reward_scaling
@@ -79,10 +79,9 @@ class Environment(gym.Env):
         }
 
     def step(self, action: np.ndarray):
+
         if self._discrete_actions:
             action = np.array([self._transform_binary_action[a] for a in action])
-
-        self.t += 1
 
         self._cash_t_1 = self.total_equity()
         self._portfolio_t_1 = deepcopy(self.portfolio)
@@ -94,9 +93,11 @@ class Environment(gym.Env):
         if self.cash < self._cash_threshold:
             self.cash = 0.0
 
+        self.t += 1
+
         return self._get_obs(), self.reward(reward_scaling=True), self._terminated(), self._truncated(), {}
 
-    def _buy(self, action):
+    def buy_amounts(self, action):
         index_buy = (action > 0) * (self.stock_data[self.t] > 0)
         buy_orders = action[index_buy]
 
@@ -106,9 +107,9 @@ class Environment(gym.Env):
             # rescale buy_orders so they sum up to one if not enough cash
             buy_orders /= np.sum(buy_orders)
         buy_amounts = buy_orders * self.cash
-        buy_amounts -= buy_amounts*self._commission_buy
+        buy_amounts -= buy_amounts * self._commission_buy
         # reserve some cash for later sell orders
-        buy_amounts -= self._commission_sell * buy_amounts*2
+        buy_amounts -= self._commission_sell * buy_amounts * 2
         buy_amounts = np.clip(buy_amounts, 0, None)
         buy_amounts[buy_amounts < self._cash_threshold] = 0
 
@@ -119,6 +120,37 @@ class Environment(gym.Env):
         # compute buy amounts in dollars for share amounts as integers
         buy_amounts = buy_amounts_share * self.stock_data[self.t, index_buy]  # Unit check: [share * ($/share) = $]
 
+        return buy_amounts_share, buy_amounts, index_buy
+
+    def sell_amounts(self, action):
+        index_sell = (action < 0) * (self.stock_data[self.t] > 0)
+        sell_orders = -action[index_sell]  # from negative sign (as actions are defined) to positive sign
+
+        # get share amounts as integers and compute sell orders in first iteration
+        sell_amounts_share = self.portfolio[
+                                 index_sell] * sell_orders  # Unit check: [share * unit_less_fraction = share]
+        sell_amounts_share = sell_amounts_share.astype(int)
+        sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
+        if np.sum(sell_amounts * self._commission_sell) > self.cash:
+            # reduce sell_amounts if not enough cash for all sell orders
+            sell_amounts *= self.cash / np.sum((sell_amounts + 1) * self._commission_sell)
+            sell_amounts = np.clip(sell_amounts, 0, None)
+
+            # compute sell amounts in shares as integers in second interation
+            sell_amounts_share = sell_amounts / self.stock_data[
+                self.t, index_sell]  # Unit check: [$ / ($/share) = share]
+            sell_amounts_share = sell_amounts_share.astype(int)
+
+            # compute sell amounts in dollars for share amounts as integers in second iteration
+            sell_amounts = sell_amounts_share * self.stock_data[
+                self.t, index_sell]  # Unit check: [share * ($/share) = $]
+
+        return sell_amounts_share, sell_amounts, index_sell
+
+    def _buy(self, action):
+
+        buy_amounts_share, buy_amounts, index_buy = self.buy_amounts(action)
+
         # check if portfolio would change insanely
         # if np.sum(buy_amounts_share) > 1e4:
         #     print("Portfolio would change insanely!")
@@ -128,24 +160,8 @@ class Environment(gym.Env):
             self.portfolio[index_buy] += buy_amounts_share  # Unit check: [$ / ($/share) = share]
 
     def _sell(self, action):
-        index_sell = (action < 0) * (self.stock_data[self.t] > 0)
-        sell_orders = -action[index_sell]  # from negative sign (as actions are defined) to positive sign
 
-        # get share amounts as integers and compute sell orders in first iteration
-        sell_amounts_share = self.portfolio[index_sell] * sell_orders  # Unit check: [share * unit_less_fraction = share]
-        sell_amounts_share = sell_amounts_share.astype(int)
-        sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
-        if np.sum(sell_amounts * self._commission_sell) > self.cash:
-            # reduce sell_amounts if not enough cash for all sell orders
-            sell_amounts *= self.cash / np.sum((sell_amounts + 1) * self._commission_sell)
-            sell_amounts = np.clip(sell_amounts, 0, None)
-
-            # compute sell amounts in shares as integers in second interation
-            sell_amounts_share = sell_amounts / self.stock_data[self.t, index_sell]  # Unit check: [$ / ($/share) = share]
-            sell_amounts_share = sell_amounts_share.astype(int)
-
-            # compute sell amounts in dollars for share amounts as integers in second iteration
-            sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
+        sell_amounts_share, sell_amounts, index_sell = self.sell_amounts(action)
 
         # update cash and portfolio if enough cash for all sell order commissions
         if self.cash >= np.sum(sell_amounts * self._commission_sell):
@@ -168,8 +184,8 @@ class Environment(gym.Env):
     def _get_obs(self):
         cash = deepcopy(np.array([self.cash/self._cash_init]))
         portfolio = deepcopy(self.portfolio/100)
-        stock_prices = deepcopy(self.stock_data[self.t - self.observation_length:self.t])
-        stock_prices -= self.stock_data[self.t - self.observation_length]
+        stock_prices = deepcopy(self.stock_data[self.t-self.observation_length+1:self.t+1])
+        stock_prices -= stock_prices[0]
         stock_prices /= np.max(np.abs(stock_prices))
         stock_prices[np.isnan(stock_prices)] = 0
         if not self._recurrent:
@@ -197,7 +213,7 @@ class Environment(gym.Env):
 
     def reset(self, **kwargs):
         self.cash = self._cash_init
-        self.t = self.observation_length
+        self.t = self.observation_length - 1
         self.portfolio = np.zeros((self.stock_data.shape[1],))
         # if random_split get random junk of total stock data and set as episode's stock data
         if self._time_limit > 0:

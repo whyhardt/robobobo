@@ -39,19 +39,21 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/rppo142_45e5.pt',
+        'load_checkpoint': True,
+        'file_checkpoint': 'trained_rl/ppo140_renv_7e6.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
-        'file_ae': 'trained_ae/transformer_ae_v1.pt',
+        'file_ae': 'trained_ae/transformer_ae_800.pt',
         'checkpoint_interval': 10,
 
-        # training parameters
-        'train': True,
+        # rl setup parameters
+        'train': False,
         'agent': 'ppo_cont',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
         'recurrent': False,
+
+        # training parameters
         'num_epochs': 2,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
@@ -83,7 +85,7 @@ if __name__ == '__main__':
     valid_policies = ['MlpPolicy', 'Attn', 'AttnLstm']
     assert cfg['policy'] in valid_policies, f"Policy must be one of: {valid_policies}"
 
-    if not cfg['recurrent'] and cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm':
+    if not cfg['recurrent'] and (cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm'):
         cfg['recurrent'] = True
         print('Recurrent policy selected, setting recurrent to True')
 
@@ -126,10 +128,13 @@ if __name__ == '__main__':
 
     # load environment
     if cfg['env_id'] == 'Custom':
-        state_dict = torch.load(cfg['file_ae'], map_location=torch.device('cpu'))
-        encoder = TransformerAutoencoder(**state_dict['model'], seq_len=state_dict['general']['seq_len'])
-        encoder.load_state_dict(state_dict['model']['state_dict'])
-        encoder.eval()
+        if cfg['file_ae'] is not None and cfg['file_ae'] != '':
+            state_dict = torch.load(cfg['file_ae'], map_location=torch.device('cpu'))
+            encoder = TransformerAutoencoder(**state_dict['model'], seq_len=state_dict['general']['seq_len'])
+            encoder.load_state_dict(state_dict['model']['state_dict'])
+            encoder.eval()
+        else:
+            encoder = None
         env = Environment(training_data, cfg['cash_init'], cfg['observation_length'],
                           time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2],
                           recurrent=cfg["recurrent"], encoder=encoder)
@@ -188,7 +193,7 @@ if __name__ == '__main__':
                 best_reward = avg_reward
                 agent.save("best_checkpoint.pt")
             if cfg['checkpoint_interval'] is not None and i % cfg['checkpoint_interval'] == 0:
-                agent.save("transformer_ae.pt")
+                agent.save("checkpoint.pt")
             print(f"Epoch {i+1}/{int(cfg['num_epochs'])}: avg_reward={avg_reward:.2f} +/- {avg_std:.2f}")
 
         # --------------------------------------------
@@ -217,8 +222,8 @@ if __name__ == '__main__':
     # --------------------------------------------
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1,discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg['recurrent'])
-        # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
+        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'],
+                          discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg["recurrent"], encoder=encoder)        # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
     test(env, agent, deterministic=True)
