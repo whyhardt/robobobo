@@ -5,9 +5,6 @@ from typing import Optional
 import gymnasium as gym
 import numpy as np
 import torch
-from matplotlib import pyplot as plt
-
-from stable_baselines3.common.env_checker import check_env
 
 from nn_architecture.ae_networks import Autoencoder
 
@@ -95,55 +92,56 @@ class Environment(gym.Env):
 
         self.t += 1
 
-        return self._get_obs(), self.reward(reward_scaling=True), self._terminated(), self._truncated(), {}
+        terminated = self._terminated()
+        reward = self.reward(reward_scaling=True) if not terminated else -1000
+
+        return self._get_obs(), reward, self._terminated(), self._truncated(), {}
 
     def buy_amounts(self, action):
         index_buy = (action > 0) * (self.stock_data[self.t] > 0)
         buy_orders = action[index_buy]
 
         # preprocessing of buy orders
-        # check if buy orders <= cash (sum of buy orders surpasses 1) and compute softmax if necessary
+        # check if buy orders <= cash (sum of buy orders surpasses 1) and rescale if necessary
         if np.sum(buy_orders) > 1:
-            # rescale buy_orders so they sum up to one if not enough cash
             buy_orders /= np.sum(buy_orders)
         buy_amounts = buy_orders * self.cash
+        # remove buy commission from cash-to-invest
         buy_amounts -= buy_amounts * self._commission_buy
         # reserve some cash for later sell orders
-        buy_amounts -= self._commission_sell * buy_amounts * 2
+        # buy_amounts -= self._commission_sell * buy_amounts * 2
+        # make sure that buy orders are positive
         buy_amounts = np.clip(buy_amounts, 0, None)
+        # make sure that buy orders are above cash threshold - otherwise set to zero
         buy_amounts[buy_amounts < self._cash_threshold] = 0
 
         # compute buy amounts in shares as integers
         buy_amounts_share = buy_amounts / self.stock_data[self.t, index_buy]  # Unit check: [$ / ($/share) = share]
         buy_amounts_share = buy_amounts_share.astype(int)
 
-        # compute buy amounts in dollars for share amounts as integers
+        # compute buy amounts in dollars for share amounts as integers in second iteration
         buy_amounts = buy_amounts_share * self.stock_data[self.t, index_buy]  # Unit check: [share * ($/share) = $]
 
         return buy_amounts_share, buy_amounts, index_buy
 
     def sell_amounts(self, action):
-        index_sell = (action < 0) * (self.stock_data[self.t] > 0)
-        sell_orders = -action[index_sell]  # from negative sign (as actions are defined) to positive sign
+        # index_sell: sell action * stock is already in stock market * stock is held in portfolio
+        index_sell = (action < 0) * (self.stock_data[self.t] > 0) * (self.portfolio > 0)
 
         # get share amounts as integers and compute sell orders in first iteration
-        sell_amounts_share = self.portfolio[
-                                 index_sell] * sell_orders  # Unit check: [share * unit_less_fraction = share]
+        sell_amounts_share = self.portfolio[index_sell] * -action[index_sell]  # Unit check: [share * unit_less_fraction = share]
         sell_amounts_share = sell_amounts_share.astype(int)
         sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
         if np.sum(sell_amounts * self._commission_sell) > self.cash:
             # reduce sell_amounts if not enough cash for all sell orders
             sell_amounts *= self.cash / np.sum((sell_amounts + 1) * self._commission_sell)
-            sell_amounts = np.clip(sell_amounts, 0, None)
 
             # compute sell amounts in shares as integers in second interation
-            sell_amounts_share = sell_amounts / self.stock_data[
-                self.t, index_sell]  # Unit check: [$ / ($/share) = share]
+            sell_amounts_share = sell_amounts / self.stock_data[self.t, index_sell]  # Unit check: [$ / ($/share) = share]
             sell_amounts_share = sell_amounts_share.astype(int)
 
             # compute sell amounts in dollars for share amounts as integers in second iteration
-            sell_amounts = sell_amounts_share * self.stock_data[
-                self.t, index_sell]  # Unit check: [share * ($/share) = $]
+            sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
 
         return sell_amounts_share, sell_amounts, index_sell
 
@@ -173,7 +171,7 @@ class Environment(gym.Env):
             print('not enough cash to sell anymore')
 
     def _terminated(self):
-        total_equity_low = self.total_equity().item() <= 0.001*self._cash_init
+        total_equity_low = self.total_equity().item() <= 0.1*self._cash_init
         # cash_low = self.cash <= 0.0001*self._cash_init
         # return bool(total_equity_low or cash_low)
         return bool(total_equity_low)
@@ -188,6 +186,11 @@ class Environment(gym.Env):
         stock_prices -= stock_prices[0]
         stock_prices /= np.max(np.abs(stock_prices))
         stock_prices[np.isnan(stock_prices)] = 0
+
+        if self.encoder is not None:
+            with torch.no_grad():
+                stock_prices = self.encode(torch.tensor(stock_prices.reshape([1] + list(stock_prices.shape)), dtype=torch.float32)).numpy()
+
         if not self._recurrent:
             stock_prices = np.reshape(stock_prices, (-1,))
             obs = np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
@@ -196,11 +199,6 @@ class Environment(gym.Env):
             cash = np.tile(cash, (1, stock_prices.shape[-1]))
             # portfolio = np.tile(portfolio, (self.observation_length, 1))
             obs = np.concatenate((cash, portfolio.reshape(1, -1), stock_prices), axis=0, dtype=np.float32)
-
-        if self.encoder is not None:
-            obs_stocks = obs[:, 1 + self.stock_data.shape[-1]:].reshape(1, self.observation_length, self.stock_data.shape[-1])
-            obs_stocks = self.encode(torch.tensor(obs_stocks, dtype=torch.float32)).detach().numpy()
-            obs = np.concatenate((obs[:, :1 + self.stock_data.shape[-1]], obs_stocks), axis=1)
 
         return obs
 

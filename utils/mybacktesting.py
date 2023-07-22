@@ -52,6 +52,8 @@ if __name__ == '__main__':
                         help='Path to the trained encoder')
     parser.add_argument('--cash_init', type=float, default=1e4,
                         help='Initial cash amount')
+    parser.add_argument('--commission', type=float, default=0.01,
+                        help='Initial cash amount')
     parser.add_argument('--observation_length', type=int, default=16,
                         help='Length of the observation')
     parser.add_argument('--train_test_split', type=float, default=0.8,
@@ -78,7 +80,8 @@ if __name__ == '__main__':
     env_data = env_data.to_numpy()
     index_start = int(args.train_test_split * len(env_data))
     env_data = env_data[index_start:]
-    env = Environment(env_data, args.cash_init, args.observation_length, encoder=encoder)
+    env = Environment(env_data, args.cash_init, args.observation_length, encoder=encoder,
+                      commission_buy=args.commission, commission_sell=args.commission)
     agent = PPO.load(args.agent, env)
 
     # collect actions from the agent

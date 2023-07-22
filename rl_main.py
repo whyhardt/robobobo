@@ -39,22 +39,22 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
-        'file_checkpoint': 'trained_rl/ppo140_renv_7e6.pt',
+        'load_checkpoint': False,
+        'file_checkpoint': 'trained_rl/ppo140_renv_36e5.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'file_ae': 'trained_ae/transformer_ae_800.pt',
         'checkpoint_interval': 10,
 
         # rl setup parameters
-        'train': False,
+        'train': True,
         'agent': 'ppo_cont',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
         'recurrent': False,
 
         # training parameters
-        'num_epochs': 2,
+        'num_epochs': 10,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,
@@ -160,15 +160,16 @@ if __name__ == '__main__':
     else:
         feature_extractor = None
 
-    feature_dim = 1024
-    net_arch = dict(pi=[feature_dim, feature_dim // 2, 64], vf=[feature_dim, feature_dim // 2, 64])
+    feature_dim = 2048
+    net_arch = dict(pi=[feature_dim, feature_dim, 256], vf=[feature_dim, feature_dim, 256])
     if feature_extractor is not None:
         policy_kwargs = dict(
             features_extractor_class=feature_extractor,
             features_extractor_kwargs=dict(feature_dim=feature_dim),
         )
     else:
-        policy_kwargs = None
+        # policy_kwargs = None
+        policy_kwargs = dict(net_arch=net_arch)
 
     # load agent
     if not cfg['load_checkpoint']:
