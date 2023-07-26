@@ -3,6 +3,7 @@ from copy import deepcopy
 from typing import Optional
 
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -17,12 +18,14 @@ class Environment(gym.Env):
                  commission_buy=0.01,
                  commission_sell=0.005,
                  reward_scaling=1e-4,
+                 threshold_terminated=0.1,
                  random_splits=True,
                  time_limit=-1,
                  discrete_actions=False,
                  recurrent=False,
                  # optional parameters
                  encoder: Optional[Autoencoder] = None,
+                 test = False
                  ):
 
         # set encoder first, since it defines the observation space
@@ -66,7 +69,14 @@ class Environment(gym.Env):
         self._discrete_actions = discrete_actions
         self._termination_reward = -100
         self._cash_threshold = 1e-2
+        self._threshold_terminated = threshold_terminated
         self._recurrent = recurrent
+        self._test = test
+        self._total_equity_episode = []
+        self._actions_taken_episode = []
+        self._portfolio_episode = []
+        self._cash_episode = []
+        self._portfolio_average_episode = np.mean(self.stock_data[observation_length - 1:], axis=1) / np.mean(self.stock_data[observation_length - 1]) * self._cash_init
 
         # mapping from binary action space ([0,1]) to real action space ([-1,1])
         # easier to switch between discrete and continuous action space
@@ -93,9 +103,24 @@ class Environment(gym.Env):
         self.t += 1
 
         terminated = self._terminated()
+        truncated = self._truncated()
         reward = self.reward(reward_scaling=True) if not terminated else -1000
 
-        return self._get_obs(), reward, self._terminated(), self._truncated(), {}
+        if self._test:
+            # collect total equity for plot
+            self._total_equity_episode.append(self.total_equity())
+            self._actions_taken_episode.append(action)
+            self._cash_episode.append(self.cash)
+            self._portfolio_episode.append(self.portfolio)
+
+        if (terminated or truncated) and self._test:
+            print(f'Test done. Total Equity: {self.total_equity()}')
+            self.plot_results()
+
+            # plot actions taken
+
+
+        return self._get_obs(), reward, terminated, truncated, {}
 
     def buy_amounts(self, action):
         index_buy = (action > 0) * (self.stock_data[self.t] > 0)
@@ -171,7 +196,7 @@ class Environment(gym.Env):
             print('not enough cash to sell anymore')
 
     def _terminated(self):
-        total_equity_low = self.total_equity().item() <= 0.1*self._cash_init
+        total_equity_low = self.total_equity().item() <= self._threshold_terminated*self._cash_init
         # cash_low = self.cash <= 0.0001*self._cash_init
         # return bool(total_equity_low or cash_low)
         return bool(total_equity_low)
@@ -223,11 +248,54 @@ class Environment(gym.Env):
             self.stock_data = deepcopy(self._dataset[start:end])
         else:
             self.stock_data = deepcopy(self._dataset)
+
+        self._total_equity_episode = []
+        self._actions_taken_episode = []
+        self._portfolio_episode = []
+        self._cash_episode = []
+        self._portfolio_average_episode = np.mean(self.stock_data[self.observation_length - 1:], axis=1) / np.mean(self.stock_data[self.observation_length - 1]) * self._cash_init
+
         return self._get_obs(), {}
 
     def render(self):
         # Render the environment to the screen
         pass
+
+    def plot_results(self):
+        fig, axs = plt.subplots(4, 1, sharex=True)
+
+        # plot the average of all stock prices
+        axs[0].plot(self._portfolio_average_episode, '--', label='Portfolio average')
+        axs[0].plot(self._total_equity_episode, label='Total Equity')
+        axs[0].set_ylabel('rel. price')
+        axs[0].grid()
+
+        actions_mean = np.mean(self._actions_taken_episode, axis=1)
+        actions_std = np.std(self._actions_taken_episode, axis=1)
+        axs[1].plot(actions_mean, label='actions')
+        axs[1].fill_between(np.arange(len(self._actions_taken_episode)), actions_mean - actions_std, actions_mean + actions_std, alpha=0.2)
+        axs[1].set_ylabel('actions')
+        axs[1].grid()
+
+        portfolio_mean = np.mean(self._portfolio_episode, axis=1)
+        portfolio_std = np.std(self._portfolio_episode, axis=1)
+        axs[2].plot(portfolio_mean, label='portfolio')
+        axs[2].fill_between(np.arange(len(portfolio_mean)), portfolio_mean - portfolio_std, portfolio_mean + portfolio_std, alpha=0.2)
+        axs[2].set_ylabel('portfolio')
+        axs[2].grid()
+
+        axs[3].plot(self._cash_episode, label='cash')
+        axs[3].set_ylabel('cash')
+        axs[3].set_xlabel('time steps (days)')
+        axs[3].set_xticks(np.arange(0, len(self._cash_episode), len(self._cash_episode) // 30))
+        # set orientation of x labels
+        for tick in axs[3].get_xticklabels():
+            tick.set_rotation(90)
+        # set x labels to every 5th tick
+        axs[3].grid()
+
+        fig.suptitle('Episode results; Total Equity: {:.2f}'.format(self.total_equity()))
+        plt.show()
 
     def close(self):
         # Close the environment

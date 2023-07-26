@@ -14,39 +14,14 @@ from stable_baselines3 import PPO, SAC, A2C, DDPG, TD3
 
 from environment import Environment
 from nn_architecture.ae_networks import TransformerAutoencoder
-
-
-def collect_actions(agent: PPO, environment: Environment):
-    """
-    Collects actions from the agent for the given environment
-    :param agent: the trained agent
-    :param environment: the environment
-    :return: a 2D-array of actions
-    """
-
-    actions_collected = []
-    amounts_collected = []
-    obs = environment.reset()[0]
-    done = False
-    truncated = False
-    while not done and not truncated:
-        action, _ = agent.predict(obs, deterministic=True)
-        actions_collected.append(action)
-        buy_amounts, _, index_buy = environment.buy_amounts(action)
-        sell_amounts, _, index_sell = environment.sell_amounts(action)
-        amounts = np.zeros(len(action))
-        amounts[index_buy] = buy_amounts
-        amounts[index_sell] = -sell_amounts
-        amounts_collected.append(amounts)
-        obs, _, done, truncated, _ = environment.step(action)
-    return np.array(actions_collected), np.array(amounts_collected)
+from training import test
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Backtest a trained agent')
-    parser.add_argument('--data', type=str, default='../stock_data/portfolio_custom140_datetime',
+    parser.add_argument('--data', type=str, default='../stock_data/portfolio_custom140',
                         help='Path to the data file. If it is a directory, all files in it will be used (only for OHCLV data)')
-    parser.add_argument('--agent', type=str, default='../trained_rl/FINAL_ppo140_renv_4e6.pt',
+    parser.add_argument('--agent', type=str, default='../trained_rl/ppo140_2048_1e6.pt',
                         help='Path to the trained agent')
     parser.add_argument('--encoder', type=str, default='../trained_ae/transformer_ae_800.pt',
                         help='Path to the trained encoder')
@@ -58,7 +33,7 @@ if __name__ == '__main__':
                         help='Length of the observation')
     parser.add_argument('--train_test_split', type=float, default=0.8,
                         help='train test split')
-    parser.add_argument('--data_env', type=str, default='../stock_data/portfolio_custom140_2008_2022.csv',
+    parser.add_argument('--data_env', type=str, default='../stock_data/portfolio_custom140_2008_2022_nocrypto.csv',
                         help='Path to the data for the environment')
     args = parser.parse_args()
 
@@ -86,7 +61,9 @@ if __name__ == '__main__':
 
     # collect actions from the agent
     print('Collecting actions from the agent...')
-    actions, amounts = collect_actions(agent, env)
+    _, _, portfolio, _ = test(env, agent, plot=False)
+    # get traded amounts by diff of portfolio
+    amounts = np.diff(np.concatenate((np.zeros((1, portfolio.shape[-1])), portfolio), axis=0), axis=0)
 
     # load data and setup backtesting environment for each file in the directory
     print('Loading data and setting up backtesting environment...')
@@ -98,37 +75,42 @@ if __name__ == '__main__':
             # print(f'Adding {columns[i]} to backtesting environment...')
 
             # load csv with pandas datetime index
-            df = pd.read_csv(os.path.join(args.data, file+'.csv'), index_col=0, header=0)[index_start:]
+            df = pd.read_csv(os.path.join(args.data, file+'.csv'), index_col=0, header=0)[index_start+args.observation_length-1:]
             df.index = pd.to_datetime(df.index)
+
+            # get index of last non-zero row
+            nonzero = (df != 0).all(1).to_list()
+            df = df[nonzero]
+            amounts_file = amounts[nonzero[1:], i]
 
             class MyStrategy(Strategy):
                 t = 0
                 observation_length = args.observation_length
-                amounts = amounts[:, i]
+                amounts = amounts_file
+                stock_name = columns[i]
+                stock_index = i
 
                 def init(self):
-                    # print('\n----------------------------------------------------')
-                    print(f'Running backtest on stock {columns[i]}')
-                    # print('----------------------------------------------------\n')
-                    # self.amounts = np.concatenate((np.zeros(self.observation_length-1), self.amounts))
+                    pass
 
                 def next(self):
-                    if  self.observation_length - 1 <= self.t < len(self.amounts):
+                    if self.t < len(self.amounts):
                         if self.amounts[self.t] > 0:
                             self.buy(size=self.amounts[self.t])
                         elif self.amounts[self.t] < 0:
                             self.sell(size=-self.amounts[self.t])
-                        # print(f'Time: {self.t+1} / {len(data)} - '
-                        #       f'Action: {self.amounts[self.t]} - '
-                        #       f'Equity: {self.equity} - ')
 
                     self.t += 1
 
+            if df.shape[0] == 0:
+                final_diff.append(0)
+                continue
             cash = 1e9
-            bt = Backtest(df, MyStrategy, cash=cash, commission=0.001)
+            bt = Backtest(df, MyStrategy, cash=cash, commission=args.commission)
 
             results = bt.run()
             final_diff.append(results['Equity Final [$]'] - cash)
 
     # sum of all final differences
-    print('Sum of all final differences: ', sum(final_diff))
+    final_diff = np.array(final_diff)
+    print('Sum of all final differences: ', np.sum(final_diff))

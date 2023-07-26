@@ -110,7 +110,7 @@ def simple_train(
     return np.array(episode_rewards, dtype=np.float32), agent
 
 
-def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot_reference=False):
+def test(env: Environment, agent: BaseAlgorithm, deterministic=True, plot=True, plot_reference=False, title=''):
     """Test trained SAC agent"""
     done = False
     truncated = False
@@ -119,11 +119,13 @@ def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot
     portfolio = []
     cash = []
     state = env.reset()[0]
+    observation_length = env.t + 1
 
     print(f"\nTest scenario (deterministic={deterministic}) started.")
     while not done and not truncated:
         # print(f"Time step: {len(rewards)}; total equity: {np.round(env.total_equity().item(), 2)}")
-        action = agent.predict(state, deterministic=deterministic)[0]
+        with torch.no_grad():
+            action = agent.predict(state, deterministic=deterministic)[0]
         state, _, done, truncated, _ = env.step(action)
         # if len(rewards) > 1 and np.abs(rewards[-1] - env.total_equity().item()) > 1e4:
         #     print("Warning: Total equity changed by more than 1000. Maybe somethings wrong")
@@ -150,12 +152,11 @@ def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot
         fig, axs = plt.subplots(4, 1, sharex=True)
 
         # plot the average of all stock prices
-        avg = np.mean(env.stock_data[:rewards.shape[0]], axis=1)
-        axs[0].plot(avg/avg[0], label='avg price')
+        avg = np.mean(env.stock_data[observation_length-1:rewards.shape[0]+observation_length], axis=1)
+        axs[0].plot(avg/avg[0], '--', label='avg price')
         axs[0].plot(rewards/rewards[0], label='total equity')
         axs[0].set_ylabel('rel. price')
         axs[0].set_ylim([0, np.max(rewards/rewards[0])*1.1])
-        axs[0].legend()
         axs[0].grid()
 
         axs[1].plot(actions_mean, label='actions')
@@ -171,42 +172,20 @@ def test(env: gym.Env, agent: BaseAlgorithm, deterministic=True, plot=True, plot
         axs[3].plot(cash, label='cash')
         axs[3].set_ylabel('cash')
         axs[3].set_xlabel('time steps (days)')
-        axs[3].set_xticks(np.arange(0, len(cash), 5))
+        axs[3].set_xticks(np.arange(0, len(cash), len(cash)//30))
         # set orientation of x labels
         for tick in axs[3].get_xticklabels():
             tick.set_rotation(90)
         # set x labels to every 5th tick
         axs[3].grid()
-        # axs[3].set_ylim([0, len(cash)-3])
 
+        plt.title(title)
         plt.show()
-        # plt.title(f"Total final equity in [$] (Grow: {total_equity[-1]/total_equity[0]:.2f})")
-        # axs[0].plot(np.convolve(total_equity, np.ones(10) / 10, mode='valid'))
 
-        # axs[1].plot(env.stock_data)
-        # axs[1].set_ylabel('Stock prices [$]')
-        #
-        # axs[2].plot(portfolio)
-        # axs[2].set_ylabel('Portfolio')
-        #
-        # axs[3].plot(actions)
-        # axs[3].set_ylabel('Actions')
-        # axs[3].set_xlabel('Time steps')
-
-        # visualize_actions(np.array(actions), cmap=None, min=-1, max=1, title='actions over time')
-        # visualize_actions(np.array(portfolio), cmap=None, title='portfolio over time')
-
+        plot_portfolio(portfolio)
         visualize_actions(actions, min=-1, max=1, title='actions over time')
-        visualize_actions(portfolio, title='portfolio over time')
 
-    # if plot_reference:
-    #     # plot the average of all stock prices
-    #     avg = np.mean(env.stock_data, axis=1)
-    #     plt.plot(avg)
-    #     plt.ylabel('Average stock price [$]')
-    #     plt.xlabel('Time step')
-    #     plt.title(f"Avg stock price in [$] (Grow: {avg[-1]/avg[0]:.2f})")
-    #     plt.show()
+    return rewards, actions, portfolio, cash
 
 
 def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
@@ -253,3 +232,26 @@ def visualize_actions(matrix, min=None, max=None, cmap='binary', title=None):
     # plt.xlabel('Time Step')
     # plt.legend()
     # plt.show()
+
+
+def plot_portfolio(portfolio, title='Portfolio over time', normalize=True):
+    """
+    Plot the portfolio over time. But only non-zero stocks.
+    :param portfolio:
+    :param title:
+    :param normalize:
+    :return:
+    """
+
+    # remove all zero columns
+    portfolio = portfolio[:, np.where(np.sum(portfolio, axis=0) != 0)[0]]
+
+    if normalize:
+        portfolio = np.concatenate((np.zeros((1, portfolio.shape[-1])), portfolio), axis=0) / np.max(portfolio, axis=0)
+
+    # plot the portfolio over time
+    plt.plot(portfolio)
+    plt.ylabel('Portfolio')
+    plt.xlabel('Time step')
+    plt.title(title)
+    plt.show()

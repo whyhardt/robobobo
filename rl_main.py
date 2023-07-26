@@ -39,15 +39,15 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/ppo140_renv_36e5.pt',
-        'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022.csv'),
+        'load_checkpoint': True,
+        'file_checkpoint': 'trained_rl/ppo140_2e6.pt',
+        'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
-        'file_ae': 'trained_ae/transformer_ae_800.pt',
+        'file_ae': 'trained_ae/transformer_ae_140_800.pt',
         'checkpoint_interval': 10,
 
         # rl setup parameters
-        'train': True,
+        'train': False,
         'agent': 'ppo_cont',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
@@ -59,19 +59,15 @@ if __name__ == '__main__':
         'num_random_actions': 5e2,
         'batch_size': 32,
         'learning_rate': 3e-4,
-        'temperature': 0.0001,
-        'train_test_split': 0.8,
+        'train_test_split': 0.9,
         'replay_buffer_size': int(1e4),
         'parameter_update_interval': 50,
-        'polyak': 0.995,
-        'gamma': 0.99,
 
         # network parameters
-        'hidden_dim': 256,
-        'num_layers': 3,
+        'hidden_dim': 64,
+        'num_layers': 2,
         'num_layers_sub': 4,
         'init_w': None,
-        'dropout': 0.0,
 
         # environment
         'time_limit': 365,
@@ -160,12 +156,12 @@ if __name__ == '__main__':
     else:
         feature_extractor = None
 
-    feature_dim = 2048
-    net_arch = dict(pi=[feature_dim, feature_dim, 256], vf=[feature_dim, feature_dim, 256])
+    net_arch = [cfg['hidden_dim'] for _ in range(cfg['num_layers'])]
+    net_arch = dict(pi=net_arch, vf=net_arch)
     if feature_extractor is not None:
         policy_kwargs = dict(
             features_extractor_class=feature_extractor,
-            features_extractor_kwargs=dict(feature_dim=feature_dim),
+            features_extractor_kwargs=dict(feature_dim=cfg['hidden_dim']),
         )
     else:
         # policy_kwargs = None
@@ -174,9 +170,14 @@ if __name__ == '__main__':
     # load agent
     if not cfg['load_checkpoint']:
         agent = agent_dict[cfg['agent']][0](policy, env, policy_kwargs)
-        print(f"Agent configuration:\nType:\t\t\t{cfg['agent']}\nPolicy:\t\t\t{cfg['policy']}\nRecurrent:\t\t{cfg['recurrent']}\nEnvironment:\t{cfg['env_id']}\n")
+        print(f"Configuration:\n\tAgent:\t\t{cfg['agent']}\n\tPolicy:\t\t{cfg['policy']}\n\tRecurrent:\t{cfg['recurrent']}\n\tEnvironment:\t{cfg['env_id']}\n\tEncoder:{cfg['file_ae']}")
     else:
         agent = agent_dict[cfg['agent']][1](cfg['file_checkpoint'], env)
+        # load replay buffer if agent is off-policy and replay buffer is available
+        if cfg['agent'] in ['sac', 'ddpg', 'td3']:
+            if os.path.isfile(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')):
+                agent.load_replay_buffer(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt'))
+                print(f"Replay buffer loaded from path {os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')}")
         print(f"Agent {cfg['agent']} from path {cfg['file_checkpoint']} loaded!")
 
     # --------------------------------------------
@@ -216,15 +217,24 @@ if __name__ == '__main__':
         # path = os.path.join('trained_rl', f'{cfg["agent"]}_{cfg["env_id"]}_{current_time}')
         path = os.path.join('trained_rl', f'checkpoint.pt')
         agent.save(path)
+
+        # save replay buffer if agent is off-policy
+        if cfg['agent'] in ['sac', 'ddpg', 'td3']:
+            agent.save_replay_buffer(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt'))
+
         print(f"Agent saved to {path}")
 
     # --------------------------------------------
     # test RL framework
     # --------------------------------------------
+
     # load environment
     if cfg['env_id'] == 'Custom':
-        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'],
+        # test_data = np.concatenate((training_data, test_data), axis=0)
+        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1, test=True,
                           discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg["recurrent"], encoder=encoder)        # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
-    test(env, agent, deterministic=True)
+    mean, std = evaluate_policy(agent, env, n_eval_episodes=1, deterministic=True)
+    print(f"Average reward over {1} episodes: {mean:.2f} +/- {std:.2f}")
+    # test(env, agent, deterministic=True, title=cfg['file_checkpoint'].split('/')[-1].split('.')[0])

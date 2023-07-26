@@ -25,11 +25,11 @@ def preprocess_stock_data(data: pd.DataFrame, mask_nan=True):
 
 if __name__ == '__main__':
 	save_single_file = False
-	max_data_range = True
+	max_data_range = False
 	mask_nan = True
 	dir_base = r'..\stock_data'
 	dir_single_files = 'portfolio_custom140'
-	file_all_stocks = 'portfolio_custom140_2008_2022_max_range.csv'
+	file_all_stocks = 'portfolio_custom145_2008_2022_normrange.csv'
 
 	if not os.path.isdir(os.path.join(dir_base, dir_single_files)):
 		os.mkdir(os.path.join(dir_base, dir_single_files))
@@ -105,8 +105,8 @@ if __name__ == '__main__':
 		stock_data = preprocess_stock_data(stock_data)
 
 		# save dataframes in csv files
-		stock_data.to_csv(os.path.join(dir_base, 'portfolio_custom145_2008_2022.csv'))
-		print(f"Downloaded {len(stocks)} stocks! Saved them to directory '..\stock_data'.")
+		stock_data.to_csv(os.path.join(dir_base, file_all_stocks))
+		print(f"Downloaded {len(stocks)} stocks! Saved them to '..\stock_data\{file_all_stocks}'.")
 	else:
 		# list of dataframes
 		for i, df in enumerate(stock_data):
