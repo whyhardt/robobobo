@@ -29,7 +29,6 @@ from nn_architecture.rl_networks import *
 from nn_architecture.ae_networks import TransformerAutoencoder
 
 import gymnasium as gym
-from gymnasium.wrappers import TimeLimit
 
 
 if __name__ == '__main__':
@@ -40,7 +39,7 @@ if __name__ == '__main__':
     cfg = {
         # general parameters
         'load_checkpoint': True,
-        'file_checkpoint': 'trained_rl/ppo140_2e6.pt',
+        'file_checkpoint': 'trained_rl/ppo140_normrange_1e6.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'file_ae': 'trained_ae/transformer_ae_140_800.pt',

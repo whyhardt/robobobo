@@ -116,6 +116,7 @@ class Environment(gym.Env):
         if (terminated or truncated) and self._test:
             print(f'Test done. Total Equity: {self.total_equity()}')
             self.plot_results()
+            print(f'Portfolio: {self.portfolio}')
 
             # plot actions taken
 
