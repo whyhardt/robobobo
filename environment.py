@@ -206,8 +206,8 @@ class Environment(gym.Env):
         return self.t == len(self.stock_data) - 1
 
     def _get_obs(self):
-        cash = deepcopy(np.array([self.cash/self._cash_init]))
-        portfolio = deepcopy(self.portfolio/100)
+        cash = np.array([self.cash/self._cash_init])
+        portfolio = self.portfolio/np.max(self.portfolio)
         stock_prices = deepcopy(self.stock_data[self.t-self.observation_length+1:self.t+1])
         stock_prices -= stock_prices[0]
         stock_prices /= np.max(np.abs(stock_prices))
