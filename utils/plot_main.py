@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from utils import ae_dataloader
-from nn_architecture import transformer_autoencoder
+from nn_architecture import ae_networks
 
 
 class plotter:
@@ -52,7 +52,7 @@ if __name__ == '__main__':
             cfg['inv_std'] = False   # already defined in create_dataloader
             cfg['inv_diff'] = False  # already defined in create_dataloader
         train_data, test_data, scaler = ae_dataloader.create_dataloader(cfg['file'], seq_len=cfg['seq_len'], batch_size=cfg['plotted_samples'], train_ratio=1.0, standardize=cfg['inv_std'], differentiate=cfg['inv_diff'])
-        data = train_data.dataset.data
+        data = train_data._dataset.data
 
         # load autoencoder
         if cfg['autoencoder'] and cfg['path_autoencoder']:

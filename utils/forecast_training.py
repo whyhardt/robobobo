@@ -10,9 +10,10 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-from nn_architecture.models import TransformerGenerator
-from nn_architecture.transformer_autoencoder import TransformerAutoencoder
+from nn_architecture.gan_networks import TransformerGenerator
+from nn_architecture.ae_networks import TransformerAutoencoder
 from utils.ae_dataloader import create_dataloader
+from utils.get_filter import moving_average
 
 
 if __name__ == '__main__':
@@ -32,7 +33,7 @@ if __name__ == '__main__':
             "train_ratio":  .8,
             "standardize":  True,
             "differentiate": True,
-            "default_save_path": os.path.join('..', 'trained_fc', 'checkpoint.pt'),
+            "default_save_path": os.path.join('..', 'trained_fc', 'transformer_ae.pt'),
         },
         "model": {
             'state_dict': None,

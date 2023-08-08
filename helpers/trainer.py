@@ -3,7 +3,7 @@ import os
 import torch
 import numpy as np
 
-from nn_architecture import losses, models
+from nn_architecture import losses, gan_networks
 from nn_architecture.losses import WassersteinGradientPenaltyLoss as Loss
 
 # https://machinelearningmastery.com/how-to-implement-wasserstein-loss-for-generative-adversarial-networks/
@@ -54,10 +54,24 @@ class Trainer:
         self.prev_g_loss = 0
         self.configuration = {
             'device': self.device,
-            'generator': str(self.generator.__class__.__name__),
-            'discriminator': str(self.discriminator.__class__.__name__),
+            'generator': {
+                'class': str(self.generator.__class__.__name__),
+                'latent_dim': generator.latent_dim,
+                'channels': generator.channels,
+                'seq_len': generator.seq_len,
+                'hidden_dim': generator.hidden_dim,
+                'num_layers': generator.num_layers,
+                'num_heads': generator.num_heads,
+            },
+            'discriminator': {
+                'class': str(self.discriminator.__class__.__name__),
+                'channels': discriminator.channels,
+                'n_classes': discriminator.n_classes,
+                'hidden_dim': discriminator.hidden_dim,
+                'num_layers': discriminator.num_layers,
+                'num_heads': discriminator.num_heads,
+            },
             'sequence_length': self.sequence_length,
-            'sequence_length_generated': self.sequence_length_generated,
             'batch_size': self.batch_size,
             'epochs': self.epochs,
             'sample_interval': self.sample_interval,
@@ -231,7 +245,7 @@ class Trainer:
 
     def save_checkpoint(self, path_checkpoint=None, generated_samples=None, generator=None, discriminator=None):
         if path_checkpoint is None:
-            path_checkpoint = 'trained_models'+os.path.sep+'checkpoint.pt'
+            path_checkpoint = 'trained_models'+os.path.sep+'transformer_ae.pt'
         if generator is None:
             generator = self.generator
         if discriminator is None:
@@ -266,8 +280,8 @@ class Trainer:
         Therefore, there's no need for the saved samples."""
 
         print("Managing checkpoints...")
-        # save current model as checkpoint.pt
-        self.save_checkpoint(path_checkpoint=os.path.join(path_checkpoint, 'checkpoint.pt'), generator=generator, discriminator=discriminator)
+        # save current model as transformer_ae.pt
+        self.save_checkpoint(path_checkpoint=os.path.join(path_checkpoint, 'transformer_ae.pt'), generator=generator, discriminator=discriminator)
 
         for f in checkpoint_files:
             if os.path.exists(os.path.join(path_checkpoint, f)):

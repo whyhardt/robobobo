@@ -95,10 +95,10 @@ class HelperMain(Helper):
             '\n\t\tor "checkpoint_02.pt". These checkpoints are considered as low-level checkpoints since they are only '
             '\n\t\tnecessary in the case of training interruption. Hereby, they can be used to continue the training from '
             '\n\t\tthe most recent sample. To continue training, the most recent checkpoint file must be renamed to '
-            '\n\t\t"checkpoint.pt".'
+            '\n\t\t"transformer_ae.pt".'
             '\n\t\tFurther, these low-level checkpoints carry the generated samples for inference purposes.'
             '\n\t1.2 After finishing the training:'
-            '\n\t\tA high-level checkpoint is saved as "checkpoint.pt", which is used to '
+            '\n\t\tA high-level checkpoint is saved as "transformer_ae.pt", which is used to '
             '\n\t\tcontinue training in another session. This high-level checkpoint does not carry the generated samples.'
             '\n\t\tTo continue training from this checkpoint file no further adjustments are necessary. '
             '\n\t\tSimply give the keyword "load_checkpoint" when calling the training process.'
@@ -114,7 +114,7 @@ class HelperMain(Helper):
             '\n\tHence, the number of training epochs is multiplied by the number of GPUs')
         print(
             '3.\tIf you want to load a pre-trained GAN, you can use the following command:'
-            '\n\tpython gan_training_main.py load_checkpoint; The default file is "trained_models/checkpoint.pt"'
+            '\n\tpython gan_training_main.py load_checkpoint; The default file is "trained_models/transformer_ae.pt"'
             '\n\tIf you want to use an other file, you can use the following command:'
             '\n\t\tpython gan_training_main.py load_checkpoint path_checkpoint="path/to/file.pt"')
         print(
@@ -226,7 +226,7 @@ def default_inputs_training_gan():
         'sample_interval': [int, 'Interval of epochs between saving samples', 10, 'Sample interval: '],
         'learning_rate': [float, 'Learning rate of the GAN', 0.0001, 'Learning rate: '],
         'path_dataset': [str, 'Path to the dataset', os.path.join('..', 'stock_data', 'stocks_sp500_2010_2020.csv'), 'Dataset: '],
-        'path_checkpoint': [str, 'Path to the checkpoint', os.path.join('..', 'trained_gan', 'checkpoint.pt'), 'Checkpoint: '],
+        'path_checkpoint': [str, 'Path to the checkpoint', os.path.join('..', 'trained_gan', 'transformer_ae.pt'), 'Checkpoint: '],
         'ddp_backend': [str, 'Backend for the DDP-Training; "nccl" for GPU; "gloo" for CPU;', 'nccl', 'DDP backend: '],
         'conditions': [str, '** Conditions to be used', "None", 'Conditions: '],
         'kw_timestep_dataset': [str, 'Keyword for the time step of the dataset', 'Time', 'Keyword for the time step of the dataset: '],
@@ -238,7 +238,7 @@ def default_inputs_training_gan():
 
 def default_inputs_visualize():
     kw_dict = {
-        'file': [str, 'File to be used', os.path.join('trained_models', 'checkpoint.pt'), 'File: '],
+        'file': [str, 'File to be used', os.path.join('trained_models', 'transformer_ae.pt'), 'File: '],
         'training_file': [str, 'Path to the original data', os.path.join('data', 'ganAverageERP.csv'), 'Training dataset: '],
         'kw_timestep_dataset': [str, 'Keyword for the time step of the dataset', 'Time', 'Keyword for the time step of the dataset: '],
         'conditions': [str, '** Conditions to be used', 'Condition', 'Conditions: '],
@@ -269,7 +269,7 @@ def default_inputs_visualize():
 
 def default_inputs_checkpoint_to_csv():
     kw_dict = {
-        'file': [str, 'File to be used', os.path.join('trained_models', 'checkpoint.pt'), 'File: '],
+        'file': [str, 'File to be used', os.path.join('trained_models', 'transformer_ae.pt'), 'File: '],
         'key': [str, '** Key of the checkpoint file to be saved; "losses" or "generated_samples"', 'generated_samples', 'Key: '],
     }
 
@@ -278,7 +278,7 @@ def default_inputs_checkpoint_to_csv():
 
 def default_inputs_generate_samples():
     kw_dict = {
-        'file': [str, 'File which contains the trained model and its configuration', os.path.join('trained_models', 'checkpoint.pt'), 'File: '],
+        'file': [str, 'File which contains the trained model and its configuration', os.path.join('trained_models', 'transformer_ae.pt'), 'File: '],
         'path_samples': [str, 'File where to store the generated samples; If None, then checkpoint name is used', 'None', 'Saving generated samples to file: '],
         'kw_timestep_dataset': [str, 'Keyword for the time step of the dataset; to determine the sequence length', 'Time', 'Keyword for the time step of the dataset: '],
         'sequence_length_total': [int, 'total sequence length of generated sample; if -1, then sequence length from training dataset', -1, 'Total sequence length of a generated sample: '],
@@ -294,7 +294,7 @@ def default_inputs_generate_samples():
 
 def default_inputs_get_gan_config():
     kw_dict = {
-        'file': [str, 'File to be used', os.path.join('trained_models', 'checkpoint.pt'), 'File: '],
+        'file': [str, 'File to be used', os.path.join('trained_models', 'transformer_ae.pt'), 'File: '],
     }
 
     return kw_dict

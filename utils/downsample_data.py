@@ -10,7 +10,7 @@ if __name__ == "__main__":
     plot = True
     plot_index = 500
     save = True
-    dataset_path = r'..\stock_data\stocks_sp500_2010_2020_bandpass.csv'
+    dataset_path = r'..\stock_data\stocks_sp500_2010_2020_mvgavg50.csv'
     plot_window_len = 1
 
     # load dataset

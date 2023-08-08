@@ -8,44 +8,49 @@ import torch
 
 from utils.ae_dataloader import create_dataloader
 from utils.get_filter import moving_average as filter
-from nn_architecture.transformer_autoencoder import TransformerAutoencoder_v0, save, train
+from nn_architecture.ae_networks import LSTMDoubleAutoencoder, TransformerAutoencoder, save, train, \
+    LSTMTransformerAutoencoder, TransformerDoubleAutoencoder
 
 if __name__ == '__main__':
 
     # get parameters from saved model
-    load_model = True
-    training = False
+    load_model = False
+    training = True
 
     model_dict = None
-    model_name = 'ae_kagglev1.pth'
+    model_name = 'transformer_ae.pt'
     model_dir = '../trained_ae'
 
     data_dir = '../stock_data'
-    data_file = 'stocks_sp500_2010_2020.csv'  # path to the csv file
+    data_file = 'portfolio_custom140_2008_2022.csv'  # path to the csv file
 
     # configuration
     cfg = {
         "model": {
             "state_dict":   None,
             "input_dim":    None,
-            "hidden_dim":   512,
-            "output_dim":   10,
-            "num_layers":   2,
-            "dropout":      .3,
+            "hidden_dim":   50,
+            "output_dim":   50,
+            "output_dim_2": 10,
+            "num_layers":   3,
+            "dropout":      .1,
+            "activation":   nn.Tanh(),
         },
         "training": {
             "lr":           1e-4,
-            "epochs":       2,
+            "epochs":       10,
         },
         "general": {
-            "seq_len":      50,
-            "scaler":       None,
-            "training_data": os.path.join(data_dir, data_file),
-            "batch_size":   32,
-            "train_ratio":  .8,
-            "standardize":  True,
-            "differentiate": False,
-            "default_save_path": os.path.join('../trained_ae', 'checkpoint.pt'),
+            "seq_len":          20,
+            "scaler":           None,
+            "training_data":    os.path.join(data_dir, data_file),
+            "batch_size":       32,
+            "train_ratio":      .8,
+            "standardize":      False,
+            "differentiate":    False,
+            "normalize":        True,
+            "start_zero":       True,
+            "default_save_path": os.path.join('../trained_ae', 'transformer_ae.pt'),
         }
     }
 
@@ -61,8 +66,13 @@ if __name__ == '__main__':
 
     # create the model
     if cfg["model"]["input_dim"] is None:
-        cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[2]
-    model = TransformerAutoencoder_v0(**cfg["model"])
+        cfg["model"]["input_dim"] = train_dataloader.dataset.data.shape[-1]
+    # model = LSTMDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
+    # model = TransformerDoubleAutoencoder(**cfg["model"], sequence_length=cfg["general"]["seq_len"])
+    model = TransformerAutoencoder(**cfg["model"])
+    if cfg["model"]["state_dict"] is not None:
+        model.load_state_dict(cfg["model"]["state_dict"])
+        print("Loaded model state dict!")
 
     # create the optimizer and criterion
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["training"]["lr"])
@@ -85,26 +95,28 @@ if __name__ == '__main__':
         plt.show()
 
     # encode a batch of sequences
-    batch = next(iter(test_dataloader))[0]
-    win_lens = np.random.randint(29, 50, size=batch.shape[-1])
+    batch = next(iter(test_dataloader))
+    # inputs = nn.BatchNorm1d(batch.shape[-1])(batch.float().permute(0, 2, 1)).permute(0, 2, 1)
     inputs = batch.float()
-    inputs_filtered = torch.zeros_like(inputs)
-    for i in range(batch.shape[-1]):
-        inputs_filtered[:, i] = filter((inputs[:, i]-inputs[0, i]).detach().cpu().numpy(), win_len=win_lens[i], dtype=torch.Tensor)
-    outputs = model.encode(inputs_filtered.to(model.device))
+    # win_lens = np.random.randint(29, 50, size=batch.shape[-1])
+    # inputs = batch.float()
+    # inputs_filtered = torch.zeros_like(inputs)
+    # for i in range(batch.shape[-1]):
+    #     inputs_filtered[:, i] = filter((inputs[:, i]-inputs[0, i]).detach().cpu().numpy(), win_len=win_lens[i], dtype=torch.Tensor)
 
     # decode a batch of sequences, rescale it with scaler and plot them
-    outputs = model.decode(outputs)
+    outputs = model.decode(model.encode(inputs.to(model.device)))
     # outputs = scaler.inverse_transform(outputs.detach().cpu().numpy())
     # inputs = scaler.inverse_transform(inputs.detach().cpu().numpy())
     fig, axs = plt.subplots(10, 1, figsize=(10, 10), sharex=True)
+    batch_num = np.random.randint(0, batch.shape[0])
     for i in range(10):
-        stock = np.random.randint(0, inputs.shape[-1])
+        feature = np.random.randint(0, inputs.shape[-1])
         # out = scaler.inverse_transform(outputs[i, :].detach().cpu().numpy())
         # inp = scaler.inverse_transform(inputs[i, :].detach().cpu().numpy())
-        axs[i].plot(inputs[:, stock].detach().cpu().numpy(), label='Original')
-        axs[i].plot(inputs_filtered[:, stock].detach().cpu().numpy(), label='Filter')
-        axs[i].plot(outputs[:, stock].detach().cpu().numpy(), label='Reconstructed')
+        axs[i].plot(inputs[batch_num, :, feature].detach().cpu().numpy(), label='Original')
+        # axs[i].plot(inputs_filtered[:, stock].detach().cpu().numpy(), label='Filter')
+        axs[i].plot(outputs[batch_num, :, feature].detach().cpu().numpy(), label='Reconstructed')
         # axs[i, 1].plot(np.cumsum(inputs[:, stock].detach().cpu().numpy()), label='Original')
         # axs[i, 1].plot(np.cumsum(inputs_filtered[:, stock].detach().cpu().numpy()), label='Filter')
         # axs[i, 1].plot(np.cumsum(outputs[:, stock].detach().cpu().numpy()), label='Reconstructed')
