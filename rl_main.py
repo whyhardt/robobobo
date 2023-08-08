@@ -38,8 +38,8 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/ppo140_normrange_1e6.pt',
+        'load_checkpoint': True,
+        'file_checkpoint': 'trained_rl/checkpoint.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
         'file_ae': 'trained_ae/transformer_ae_140_800.pt',
@@ -47,7 +47,7 @@ if __name__ == '__main__':
 
         # rl setup parameters
         'train': True,
-        'agent': 'ppo_cont',
+        'agent': 'sac',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
         'recurrent': False,
@@ -180,8 +180,8 @@ if __name__ == '__main__':
         if cfg['agent'] in ['sac', 'ddpg', 'td3']:
             if os.path.exists(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')):
                 agent.load_replay_buffer(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt'))
-                print(f"Replay buffer loaded from path {os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')}")
-        print(f"Agent {cfg['agent']} from path {cfg['file_checkpoint']} loaded!")
+                print(f"Replay buffer loaded from path {os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')}!")
+        print(f"Agent {cfg['agent']} loaded from path {cfg['file_checkpoint']}!")
 
     # --------------------------------------------
     # train RL framework
