@@ -207,7 +207,7 @@ class Environment(gym.Env):
 
     def _get_obs(self):
         cash = np.array([self.cash/self._cash_init])
-        portfolio = self.portfolio/np.max(self.portfolio)
+        portfolio = self.portfolio/np.max(self.portfolio) if np.max(self.portfolio) != 0 else deepcopy(self.portfolio)  # old: /100
         stock_prices = deepcopy(self.stock_data[self.t-self.observation_length+1:self.t+1])
         stock_prices -= stock_prices[0]
         stock_prices /= np.max(np.abs(stock_prices))

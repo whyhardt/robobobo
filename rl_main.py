@@ -38,7 +38,7 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
+        'load_checkpoint': False,
         'file_checkpoint': 'trained_rl/ppo140_normrange_1e6.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
@@ -46,19 +46,19 @@ if __name__ == '__main__':
         'checkpoint_interval': 10,
 
         # rl setup parameters
-        'train': False,
+        'train': True,
         'agent': 'ppo_cont',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
         'recurrent': False,
 
         # training parameters
-        'num_epochs': 10,
+        'num_epochs': 1,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,
         'learning_rate': 3e-4,
-        'train_test_split': 0.9,
+        'train_test_split': 0.8,
         'replay_buffer_size': int(1e4),
         'parameter_update_interval': 50,
 
@@ -156,7 +156,11 @@ if __name__ == '__main__':
         feature_extractor = None
 
     net_arch = [cfg['hidden_dim'] for _ in range(cfg['num_layers'])]
-    net_arch = dict(pi=net_arch, vf=net_arch)
+    if cfg['agent'] == 'sac':
+        net_arch = dict(pi=net_arch, qf=net_arch)
+    else:
+        net_arch = dict(pi=net_arch, vf=net_arch)
+
     if feature_extractor is not None:
         policy_kwargs = dict(
             features_extractor_class=feature_extractor,
@@ -174,7 +178,7 @@ if __name__ == '__main__':
         agent = agent_dict[cfg['agent']][1](cfg['file_checkpoint'], env)
         # load replay buffer if agent is off-policy and replay buffer is available
         if cfg['agent'] in ['sac', 'ddpg', 'td3']:
-            if os.path.isfile(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')):
+            if os.path.exists(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')):
                 agent.load_replay_buffer(os.path.join('trained_rl', 'replay_buffer_checkpoint.pt'))
                 print(f"Replay buffer loaded from path {os.path.join('trained_rl', 'replay_buffer_checkpoint.pt')}")
         print(f"Agent {cfg['agent']} from path {cfg['file_checkpoint']} loaded!")
@@ -186,7 +190,7 @@ if __name__ == '__main__':
     if cfg['train']:
         avg_rewards, avg_stds, best_reward = [], [], 0
         for i in range(int(cfg['num_epochs'])):
-            agent.learn(total_timesteps=cfg['num_actions_per_epoch'], log_interval=10)
+            agent.learn(total_timesteps=cfg['num_actions_per_epoch'])
             avg_reward, avg_std = evaluate_policy(agent, env, n_eval_episodes=5)
             avg_rewards.append(avg_reward)
             avg_stds.append(avg_std)
