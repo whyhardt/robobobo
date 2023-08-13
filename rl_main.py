@@ -117,7 +117,9 @@ if __name__ == '__main__':
     print('Initializing framework...')
 
     # load data
-    training_data = pd.read_csv(cfg['file_data'], index_col=0, header=0).to_numpy(dtype=np.float32)
+    training_data = pd.read_csv(cfg['file_data'], index_col=0, header=0)
+    portfolio_names = training_data.columns
+    training_data = training_data.to_numpy(dtype=np.float32)
     test_data = training_data[int(cfg['train_test_split']*len(training_data)):]
     training_data = training_data[:int(cfg['train_test_split']*len(training_data))]
 
@@ -130,7 +132,7 @@ if __name__ == '__main__':
             encoder.eval()
         else:
             encoder = None
-        env = Environment(training_data, cfg['cash_init'], cfg['observation_length'],
+        env = Environment(training_data, portfolio_names, cfg['cash_init'], cfg['observation_length'],
                           time_limit=cfg['time_limit'], discrete_actions=agent_dict[cfg['agent']][2],
                           recurrent=cfg["recurrent"], encoder=encoder)
         # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
@@ -234,7 +236,7 @@ if __name__ == '__main__':
     # load environment
     if cfg['env_id'] == 'Custom':
         # test_data = np.concatenate((training_data, test_data), axis=0)
-        env = Environment(test_data, cfg['cash_init'], cfg['observation_length'], time_limit=-1, test=True,
+        env = Environment(test_data, portfolio_names, cfg['cash_init'], cfg['observation_length'], time_limit=-1, test=True,
                           discrete_actions=agent_dict[cfg['agent']][2], recurrent=cfg["recurrent"], encoder=encoder)        # env = TimeLimit(env, max_episode_steps=cfg['time_limit'])
     else:
         env = gym.make(cfg['env_id'], render_mode="human")    # rewards, std = evaluate_policy(agent, env, n_eval_episodes=1, return_episode_rewards=True)
