@@ -1,19 +1,16 @@
 # train a forecasting model for stock data
-# use transformer generator as forecasting model
 # use stock data as input
 # load data with ae_dataloader
 
-# %%
 # import packages
 import os
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-from nn_architecture.gan_networks import TransformerGenerator
+from nn_architecture.forecasting_networks import LSTMForecasting
 from nn_architecture.ae_networks import TransformerAutoencoder
 from utils.ae_dataloader import create_dataloader
-from utils.get_filter import moving_average
 
 
 if __name__ == '__main__':
@@ -26,24 +23,25 @@ if __name__ == '__main__':
             'file_model': os.path.join('..', 'trained_fc', 'bp_fc_1000ep.pt'),
         },
         "general": {
-            "seq_len":      40,     # for dataloader; how many time steps per total sequence
+            "seq_len":      16,     # for dataloader; how many time steps per total sequence
             "scaler":       None,
-            "training_data": os.path.join('..', 'stock_data', 'stocks_sp500_2010_2020_bandpass_downsampled10.csv'),
-            "batch_size":   128,
+            "training_data": os.path.join('..', 'stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
+            "batch_size":   32,
             "train_ratio":  .8,
-            "standardize":  True,
-            "differentiate": True,
+            "standardize":  False,
+            "differentiate": False,
+            "start_zero": True,
+            "normalize": True,
             "default_save_path": os.path.join('..', 'trained_fc', 'transformer_ae.pt'),
         },
         "model": {
             'state_dict': None,
             'state_dict_optimizer': None,
-            'num_layers': 2,
-            'hidden_dim': 2048,
+            'num_layers': 3,
+            'hidden_size': 2048,
             'dropout': 0.1,
-            'seq_len': 10,       # how many time steps to forecast (split from total sequence)
-            'latent_dim': 10,   # features * time steps to consider
-            'channels': 1,      # features given by the autoencoder
+            'seq_len': 1,       # how many time steps to forecast (split from total sequence)
+            'input_size': 1,
         },
         "training": {
             'num_epochs': 1,
@@ -69,12 +67,12 @@ if __name__ == '__main__':
     encoder.eval()
 
     # set channels and seq_len of model
-    cfg['model']['channels'] = encoder_dict['model']['output_dim']
-    cfg['model']['latent_dim'] = (cfg['general']['seq_len']-cfg['model']['seq_len'])*cfg['model']['channels']
+    cfg['model']['input_size'] = encoder_dict['model']['output_dim']
+    cfg['model']['output_size'] = encoder_dict['model']['input_dim']
 
     # create model
     print('Initializing forecast model...')
-    model = TransformerGenerator(**cfg["model"], decoder=encoder.decoder).to(device)
+    model = LSTMForecasting(**cfg['model']).to(device)
     loss = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg['training']['learning_rate'])
     # load model
@@ -83,7 +81,6 @@ if __name__ == '__main__':
         model.load_state_dict(cfg['model']['state_dict'])
         optimizer.load_state_dict(cfg['model']['state_dict_optimizer'])
 
-    # %%
     # train model
     losses = np.zeros((cfg['training']['num_epochs'], 2))
     print('Training model...')
@@ -101,9 +98,9 @@ if __name__ == '__main__':
             loss_train = loss(y_hat, y)
 
             # backward pass
+            optimizer.zero_grad()
             loss_train.backward()
             optimizer.step()
-            optimizer.zero_grad()
 
             # Test the model
             test_data = next(iter(test_dl))
@@ -120,21 +117,18 @@ if __name__ == '__main__':
         losses[epoch, :] = [loss_train.item(), loss_test.item()]
     print("Finished training!")
 
-    # %%
     # save model
     cfg['model']['state_dict'] = model.state_dict()
     cfg['model']['state_dict_optimizer'] = optimizer.state_dict()
     torch.save(cfg, cfg['general']['default_save_path'])
     print(f"Model saved to {cfg['general']['default_save_path']}!")
 
-    # %%
     # plot losses
     plt.plot(losses[:, 0], label='train')
     plt.plot(losses[:, 1], label='test')
     plt.legend()
     plt.show()
 
-    # %%
     # plot predictions for test data
     print('Plotting predictions...')
     model.eval()

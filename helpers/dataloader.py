@@ -1,6 +1,11 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import torch
+from typing import Union, List
+
+from matplotlib import pyplot as plt
 
 
 class Dataloader:
@@ -9,9 +14,7 @@ class Dataloader:
     - transform data (e.g. standardize, normalize, differentiate) and save the parameters for inverse transformation
     - convert to tensor"""
 
-    def __init__(self, path=None,
-                 diff_data=False, std_data=False, norm_data=False,
-                 kw_timestep='Time', col_label='Condition'):
+    def __init__(self, path=None, diff_data=False, std_data=False, norm_data=False):#, multichannel: Union[bool, List[str]]=False):
         """Load data from csv as pandas dataframe and convert to tensor.
 
         Args:
@@ -24,42 +27,56 @@ class Dataloader:
             # Load data from csv as pandas dataframe and convert to tensor
             df = pd.read_csv(path)
 
-            # get first column index of a time step
-            #n_col_data = [index for index in range(len(df.columns)) if kw_timestep in df.columns[index]]
+            # reshape and filter data based on channel specifications
+            channels = [0]
+            n_channels = len(channels)
+            self.channels = channels
 
-            #if not isinstance(col_label, list):
-            #    col_label = [col_label]
+            # get first column index of a time step
+            n_col_data = [index for index in range(len(df.columns)) if kw_timestep in df.columns[index]]
+
+            if not isinstance(col_label, list):
+                col_label = [col_label]
 
             # Get labels and data
-            dataset = torch.FloatTensor(df.to_numpy())
-            labels = torch.zeros((dataset.shape[0], len(col_label)))
-            for i, l in enumerate(col_label):
-                labels[:, i] = torch.FloatTensor(df[l])
-                # del df[l]
+            dataset = torch.FloatTensor(df.to_numpy()[:, n_col_data])
+            n_labels = len(col_label) if col_label[0] != '' else 0
+            labels = torch.zeros((dataset.shape[0], n_labels))
+            if n_labels:
+                for i, l in enumerate(col_label):
+                    labels[:, i] = torch.FloatTensor(df[l])
+
+            # if multichannel:
+            #     channel_labels = torch.FloatTensor(df[channel_label])
 
             if diff_data:
                 # Diff of data
                 dataset = dataset[:, 1:] - dataset[:, :-1]
 
-            self.dataset_min = None
-            self.dataset_max = None
+            # self.dataset_min = None
+            # self.dataset_max = None
+            self.dataset_min = torch.min(dataset)
+            self.dataset_max = torch.max(dataset)
             if norm_data:
                 # Normalize data
-                dataset_min = torch.min(dataset)
-                dataset_max = torch.max(dataset)
-                dataset = (dataset - dataset_min) / (dataset_max - dataset_min)
-                self.dataset_min = dataset_min
-                self.dataset_max = dataset_max
+                dataset = (dataset - self.dataset_min) / (self.dataset_max - self.dataset_min)
 
-            self.dataset_mean = None
-            self.dataset_std = None
+            # self.dataset_mean = None
+            # self.dataset_std = None
+            self.dataset_mean = dataset.mean(dim=0).unsqueeze(0)
+            self.dataset_std = dataset.std(dim=0).unsqueeze(0)
             if std_data:
                 # standardize data
-                dataset_mean = dataset.mean(dim=0).unsqueeze(0)
-                dataset_std = dataset.std(dim=0).unsqueeze(0)
-                self.dataset_mean = dataset_mean
-                self.dataset_std = dataset_std
-                dataset = (dataset - dataset_mean) / dataset_std
+                dataset = (dataset - self.dataset_mean) / self.dataset_std
+
+            # reshape data to separate electrodes --> new shape: (trial, sequence, channel)
+            if len(self.channels) > 1:
+                sort_index = df.sort_values(channel_label, kind="mergesort").index
+                dataset = dataset[sort_index].view(n_channels, dataset.shape[0]//n_channels, dataset.shape[1]).permute(1, 2, 0)
+                labels = labels[sort_index].view(n_channels, labels.shape[0]//n_channels, labels.shape[1]).permute(1, 2, 0)
+            else:
+                dataset = dataset.unsqueeze(-1)
+                labels = labels.unsqueeze(-1)
 
             # concatenate labels to data
             dataset = torch.concat((labels, dataset), 1)
@@ -67,68 +84,29 @@ class Dataloader:
             self.dataset = dataset
             self.labels = labels
 
-    def get_data(self, sequence_length=None, windows_slices=False, stride=1, pre_pad=0, shuffle=True):
+    def get_data(self, shuffle=True):
         """returns the data as a tensor"""
-        if windows_slices:
-            # pre-pad data with pre_pad zeros
-            data = torch.zeros((self.dataset.shape[0], self.dataset.shape[-1] + pre_pad))
-            data[:, :self.labels.shape[1]] = self.labels
-            data[:, pre_pad+self.labels.shape[-1]:] = self.dataset[:, self.labels.shape[-1]:]
-            # if windows_slices is True, return windows of size sequence_length with stride 1
-            if sequence_length < 0 or sequence_length + stride > self.dataset.shape[1]:
-                raise ValueError(f"If windows slices are used, the sequence_length must be positive and smaller than len(data) (={self.dataset.shape[1]-self.labels.shape[1]}) + stride (={stride}).")
-            dataset = self.windows_slices(data, sequence_length, stride=stride)
-        elif windows_slices is False and sequence_length:
-            # if windows_slices is False, return only one window of size sequence_length from the beginning
-            if sequence_length == -1:
-                sequence_length = self.dataset.shape[1] - self.labels.shape[1]
-            if sequence_length < 0 or sequence_length > self.dataset.shape[1] - self.labels.shape[1]:
-                raise ValueError(f"If windows slices are not used, the sequence_length must be smaller than len(data) (={self.dataset.shape[1]-self.labels.shape[1]}).")
-            dataset = self.dataset[:, :sequence_length + self.labels.shape[1]]
-        else:
-            dataset = self.dataset
-
-        # shuffle dataset
         if shuffle:
-            dataset = dataset[torch.randperm(dataset.shape[0])]
-        return dataset
+            return self.dataset[torch.randperm(self.dataset.shape[0])]
+        else:
+            return self.dataset
 
     def get_labels(self):
         return self.labels
 
-    def dataset_split(self, dataset=None, train_size=0.8, test_size=None, shuffle=True):
+    def dataset_split(self, dataset=None, train_size=0.8, shuffle=True):
         """Split dataset into train and test set. Returns the indices of the split."""
-
-        if dataset is None:
-            dataset = self.dataset
-
-        if test_size is None:
-            test_size = 1 - train_size
-
-        if train_size + test_size > 1:
-            raise ValueError(f"train_size + test_size (={train_size}+{test_size}) must be <= 1.")
 
         # Split dataset into train and test set
         train_size = int(train_size * dataset.shape[0])
-        test_size = int(test_size * dataset.shape[0])
 
         if shuffle:
-            indices = torch.randperm(dataset.shape[0])
-            dataset = dataset[indices]
-        else:
-            indices = torch.arange(dataset.shape[0])
+            dataset = dataset[torch.randperm(self.dataset.shape[0])]
 
         train_dataset = dataset[:train_size]
-        test_dataset = dataset[train_size:train_size + test_size]
-        train_idx = indices[:train_size]
-        test_idx = indices[train_size:train_size + test_size]
+        test_dataset = dataset[train_size:]
 
-        # indices = np.array(range(dataset.shape[0]))
-        # if shuffle:
-        #     np.random.shuffle(indices)
-        # train_idx, test_idx = indices[:train_size], indices[train_size:train_size + test_size]
-
-        return train_dataset, test_dataset, train_idx, test_idx
+        return train_dataset, test_dataset
 
     def downsample(self, target_sequence_length):
         """Downsample data to target_sequence_length"""
@@ -143,7 +121,7 @@ class Dataloader:
     def get_std(self):
         return self.dataset_std
 
-    def windows_slices(self, sequence, window_size, stride=5):
+    def _windows_slices(self, sequence, window_size, stride=5):
         """Create a moving window of size window_size with stride stride.
         The last window is padded with 0 if it is smaller than window_size.
 
@@ -155,6 +133,7 @@ class Dataloader:
         Returns:
             torch.Tensor: Tensor of windows.
         """
+        warnings.warn("This function is deprecated and will be removed in future releases.", DeprecationWarning)
 
         # Create a moving window of size window_size with stride stride
         n_labels = self.labels.shape[1]
