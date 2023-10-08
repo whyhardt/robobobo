@@ -5,7 +5,7 @@ from datetime import datetime
 import torch
 import torch.multiprocessing as mp
 
-from helpers.trainer import Trainer
+from helpers.gan_trainer_old import Trainer
 from helpers.get_master import find_free_port
 from helpers.ddp_training import run, DDPTrainer
 from nn_architecture.gan_networks import TransformerGenerator, TransformerDiscriminator, TtsDiscriminator

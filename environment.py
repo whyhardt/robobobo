@@ -13,6 +13,7 @@ from nn_architecture.ae_networks import Autoencoder
 class Environment(gym.Env):
     def __init__(self,
                  stock_data,
+                 portfolio_names,
                  cash: int,
                  observation_length: int,
                  commission_buy=0.01,
@@ -25,7 +26,7 @@ class Environment(gym.Env):
                  recurrent=False,
                  # optional parameters
                  encoder: Optional[Autoencoder] = None,
-                 test = False
+                 test = False,
                  ):
 
         # set encoder first, since it defines the observation space
@@ -77,6 +78,9 @@ class Environment(gym.Env):
         self._portfolio_episode = []
         self._cash_episode = []
         self._portfolio_average_episode = np.mean(self.stock_data[observation_length - 1:], axis=1) / np.mean(self.stock_data[observation_length - 1]) * self._cash_init
+        self._portfolio_names = portfolio_names
+        self._forex_tag = '=X'
+        self._crypto_tag = '-USD'
 
         # mapping from binary action space ([0,1]) to real action space ([-1,1])
         # easier to switch between discrete and continuous action space
@@ -141,10 +145,18 @@ class Environment(gym.Env):
         # make sure that buy orders are above cash threshold - otherwise set to zero
         buy_amounts[buy_amounts < self._cash_threshold] = 0
 
-        # compute buy amounts in shares as integers
+        # compute buy amounts in shares
+        index_buy_num = np.where(index_buy)[0]
         buy_amounts_share = buy_amounts / self.stock_data[self.t, index_buy]  # Unit check: [$ / ($/share) = share]
-        buy_amounts_share = buy_amounts_share.astype(int)
 
+        # compute buy amounts in shares as integers - except forex or crypto
+        index_int = [not (self._forex_tag in name or self._crypto_tag in name) for name in self._portfolio_names] * index_buy
+        index_int_num = np.where(index_int)[0]
+        index_int = np.zeros_like(index_buy_num, dtype=bool)
+        for i, n in enumerate(index_int_num):
+            index_int[i] = True if n in index_buy_num else False
+
+        buy_amounts_share[index_int] = buy_amounts_share[index_int].astype(int)
         # compute buy amounts in dollars for share amounts as integers in second iteration
         buy_amounts = buy_amounts_share * self.stock_data[self.t, index_buy]  # Unit check: [share * ($/share) = $]
 
@@ -153,20 +165,41 @@ class Environment(gym.Env):
     def sell_amounts(self, action):
         # index_sell: sell action * stock is already in stock market * stock is held in portfolio
         index_sell = (action < 0) * (self.stock_data[self.t] > 0) * (self.portfolio > 0)
+        index_sell_num = np.where(index_sell)[0]
 
         # get share amounts as integers and compute sell orders in first iteration
         sell_amounts_share = self.portfolio[index_sell] * -action[index_sell]  # Unit check: [share * unit_less_fraction = share]
-        sell_amounts_share = sell_amounts_share.astype(int)
+
+        # compute buy amounts in shares as integers - except forex or crypto
+        index_int = [not (self._forex_tag in name or self._crypto_tag in name) for name in self._portfolio_names] * index_sell
+        index_int_num = np.where(index_int)[0]
+
+        index_int = np.zeros_like(index_sell_num, dtype=bool)
+        for i, n in enumerate(index_int_num):
+            index_int[i] = True if n in index_sell_num else False
+
+        # set sell amounts of stocks to integers -> no fractions of stocks
+        sell_amounts_share[index_int] = sell_amounts_share[index_int].astype(int)
+        # compute buy amounts in dollars for share amounts as integers in second iteration
         sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
+
         if np.sum(sell_amounts * self._commission_sell) > self.cash:
             # reduce sell_amounts if not enough cash for all sell orders
             sell_amounts *= self.cash / np.sum((sell_amounts + 1) * self._commission_sell)
 
             # compute sell amounts in shares as integers in second interation
             sell_amounts_share = sell_amounts / self.stock_data[self.t, index_sell]  # Unit check: [$ / ($/share) = share]
-            sell_amounts_share = sell_amounts_share.astype(int)
 
-            # compute sell amounts in dollars for share amounts as integers in second iteration
+            # compute buy amounts in shares as integers - except forex or crypto
+            index_int = [not (self._forex_tag in name or self._crypto_tag in name) for name in self._portfolio_names] * index_sell
+            index_int_num = np.where(index_int)[0]
+            index_int = np.zeros_like(index_sell_num, dtype=bool)
+            for i, n in enumerate(index_int_num):
+                index_int[i] = True if n in index_sell_num else False
+
+            # set sell amounts of stocks to integers -> no fractions of stocks
+            sell_amounts_share[index_int] = sell_amounts_share[index_int].astype(int)
+            # compute buy amounts in dollars for share amounts as integers in second iteration
             sell_amounts = sell_amounts_share * self.stock_data[self.t, index_sell]  # Unit check: [share * ($/share) = $]
 
         return sell_amounts_share, sell_amounts, index_sell
@@ -207,7 +240,16 @@ class Environment(gym.Env):
 
     def _get_obs(self):
         cash = np.array([self.cash/self._cash_init])
-        portfolio = self.portfolio/np.max(self.portfolio) if np.max(self.portfolio) != 0 else deepcopy(self.portfolio)  # old: /100
+        # portfolio = self.portfolio/np.max(self.portfolio) if np.max(self.portfolio) != 0 else deepcopy(self.portfolio)  # old: /100
+        # get value of each portfolio element instead of amount of shares
+        portfolio_value = np.zeros_like(self.portfolio)
+        for i in range(len(self.portfolio)):
+            if self.portfolio[i] == 0 or self.stock_data[self.t, i] != 0:
+                portfolio_value[i] = 0
+            else:
+                portfolio_value[i] = portfolio_value[i]*self.stock_data[self.t, i]
+        portfolio = portfolio_value/np.max(portfolio_value) if np.max(portfolio_value) != 0 else deepcopy(portfolio_value)
+
         stock_prices = deepcopy(self.stock_data[self.t-self.observation_length+1:self.t+1])
         stock_prices -= stock_prices[0]
         stock_prices /= np.max(np.abs(stock_prices))
