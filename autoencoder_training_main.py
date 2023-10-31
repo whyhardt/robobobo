@@ -57,6 +57,7 @@ def main():
         'history': None,
         'trained_epochs': 0,
         'sequence_length': 16,
+        'set_auto_zero': True,
     }
 
     # ----------------------------------------------------------------------------------------------------------------------
@@ -201,6 +202,31 @@ def main():
     
         trainer.save_checkpoint(opt['save_name'], update_history=True, samples=samples)
         print(f"Model and configuration saved in {opt['save_name']}")
+        
+        # ----------------------------------------------------------------------------------------------------------------------
+        # Plot results
+        # ----------------------------------------------------------------------------------------------------------------------
+        
+        # create plot dataset
+        plot_dataset = test_dataset[np.random.choice(test_dataset.shape[0], 1)]
+        plot_dataset = torch.tensor(plot_dataset, dtype=torch.float32).to(opt['device'])
+        
+        # process with model
+        model.eval()
+        with torch.no_grad():
+            plot_dataset_reconstructed = model(plot_dataset)
+        # get index of all 0s in plot_dataset and set all values in plot_dataset_reconstructed to 0 at this index
+        plot_dataset_reconstructed[torch.where(plot_dataset == 0)] = 0 
+        
+        # plot
+        import matplotlib.pyplot as plt
+        fig, axs = plt.subplots(10, 1, figsize=(10, 10))
+        for n, i in enumerate(np.random.choice(plot_dataset.shape[-1], 10)):
+            axs[n].plot(plot_dataset[0, :, i].cpu().numpy(), label='original')
+            axs[n].plot(plot_dataset_reconstructed[0, :, i].cpu().numpy(), label='reconstructed')
+        axs[n].legend()
+        plt.show()
+        
 
 if __name__ == "__main__":
     main()

@@ -424,6 +424,7 @@ class AETrainer(Trainer):
         self.sample_interval = opt['sample_interval'] if 'sample_interval' in opt else 100
         self.learning_rate = opt['learning_rate'] if 'learning_rate' in opt else 0.0001
         self.rank = 0  # Device: cuda:0, cuda:1, ... --> Device: cuda:rank
+        self.set_auto_zero = opt['set_auto_zero'] if 'set_auto_zero' in opt else False
 
         # model
         self.model = model
@@ -526,6 +527,9 @@ class AETrainer(Trainer):
             # inputs = filter(inputs.detach().cpu().numpy(), win_len=random.randint(29, 50), dtype=torch.Tensor)
             inputs = batch.float().to(self.model.device)
             outputs = self.model(inputs)
+            # set autoencoder output to zero if set_auto_zero is True
+            if self.set_auto_zero:
+                outputs[torch.where(inputs==0)] = 0
             loss = self.loss(outputs, inputs)
             loss.backward()
             self.optimizer.step()
@@ -540,6 +544,9 @@ class AETrainer(Trainer):
             for batch in data:
                 inputs = batch.float().to(self.model.device)
                 outputs = self.model(inputs)
+                # set autoencoder output to zero if set_auto_zero is True
+                if self.set_auto_zero:
+                    outputs[torch.where(inputs==0)] = 0
                 loss = self.loss(outputs, inputs)
                 total_loss += loss.item()
                 if self.trained_epochs % self.sample_interval == 0:

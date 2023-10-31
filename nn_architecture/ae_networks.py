@@ -10,8 +10,6 @@ import torch.nn as nn
 from torch import Tensor
 
 
-# from utils.get_filter import moving_average as filter
-
 class Autoencoder(nn.Module):
 
     TARGET_CHANNELS = 0

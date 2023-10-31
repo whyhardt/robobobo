@@ -1,0 +1,9 @@
+playground.py
+stock_data
+trained_ae
+trained_fc
+trained_gan
+trained_filter
+training_logs
+__pycache__
+settings.json
