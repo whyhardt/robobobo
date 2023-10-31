@@ -69,7 +69,7 @@ def main():
         x_min, x_max = dataset.min(axis=1), dataset.max(axis=1)
         x_min = x_min.reshape(-1, 1, dataset.shape[-1])
         x_max = x_max.reshape(-1, 1, dataset.shape[-1])
-        x_max[np.where(x_max==0)] = 1e-9
+        x_max[np.where(x_max==x_min)] = 1e-9
         return (dataset-x_min)/(x_max-x_min)
 
     # Split data function
