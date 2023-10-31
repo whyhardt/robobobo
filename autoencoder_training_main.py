@@ -66,7 +66,10 @@ def main():
 
     # Scale function -> Not necessary; already in dataloader -> param: norm_data=True
     def scale(dataset):
-        x_min, x_max = dataset.min(), dataset.max()
+        x_min, x_max = dataset.min(axis=1), dataset.max(axis=1)
+        x_min = x_min.reshape(-1, 1, dataset.shape[-1])
+        x_max = x_max.reshape(-1, 1, dataset.shape[-1])
+        x_max[np.where(x_max==0)] = 1e-9
         return (dataset-x_min)/(x_max-x_min)
 
     # Split data function
@@ -82,9 +85,9 @@ def main():
         return test, train
 
     dataset = pd.read_csv(opt['path_dataset'], index_col=0, header=0).to_numpy()
-    dataset = scale(dataset)
     # create windows of length default_args['sequence_length'] and stack as 3D tensor
     dataset = np.stack([dataset[i:i+opt['sequence_length']] for i in range(dataset.shape[0]-opt['sequence_length'])])
+    dataset = scale(dataset)
 
     # Determine n_channels, output_dim, and seq_length
     opt['n_channels'] = dataset.shape[-1]

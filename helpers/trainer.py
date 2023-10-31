@@ -475,6 +475,7 @@ class AETrainer(Trainer):
 
     def training(self, train_data, test_data):
         try:
+            self.model.train()
             path_checkpoint = 'trained_ae'
             if not os.path.exists(path_checkpoint):
                 os.makedirs(path_checkpoint)
@@ -506,6 +507,7 @@ class AETrainer(Trainer):
                 self.print_log(epoch + 1, train_loss, test_loss)
 
             self.manage_checkpoints(path_checkpoint, [checkpoint_01_file, checkpoint_02_file], update_history=True, samples=samples)
+            self.model.eval()
             return samples
 
         except KeyboardInterrupt:
