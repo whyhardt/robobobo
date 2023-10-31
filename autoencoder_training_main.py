@@ -57,7 +57,7 @@ def main():
         'history': None,
         'trained_epochs': 0,
         'sequence_length': 16,
-        'set_auto_zero': True,
+        'set_auto_zero': False,
     }
 
     # ----------------------------------------------------------------------------------------------------------------------
@@ -219,7 +219,7 @@ def main():
         with torch.no_grad():
             plot_dataset_reconstructed = model(plot_dataset)
         # get index of all 0s in plot_dataset and set all values in plot_dataset_reconstructed to 0 at this index
-        plot_dataset_reconstructed[torch.where(plot_dataset == 0)] = 0 
+        # plot_dataset_reconstructed[torch.where(plot_dataset == 0)] = 0 
         
         # plot
         import matplotlib.pyplot as plt
