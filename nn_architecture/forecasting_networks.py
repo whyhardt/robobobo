@@ -1,33 +1,85 @@
 '''This file contains network architectures for forecasting tasks'''
 
+from enum import auto
+from turtle import forward
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+from nn_architecture.ae_networks import Autoencoder
 
 
 class LSTMForecasting(nn.Module):
     '''LSTM network for forecasting tasks'''
 
-    def __init__(self, input_size: int, hidden_size: int, output_size: int, num_layers: int = 1, dropout: float = 0.0):
+    def __init__(
+        self, 
+        n_channels: int, 
+        hidden_dim: int, 
+        sequence_length: int, 
+        num_layers: int = 1, 
+        dropout: float = 0.0,
+        ):
         super().__init__()
-        self.hidden_size = hidden_size
+        
+        # network parameters
+        self.hidden_size = hidden_dim
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
-        self.fc_in = nn.Linear(input_size, hidden_size)
-        self.fc_out = nn.Linear(hidden_size, output_size)
+        self.sequence_length = sequence_length
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # network layers
+        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, dropout=dropout, batch_first=True)
+        self.fc_in = nn.Linear(n_channels, hidden_dim)
+        self.fc_out = nn.Linear(hidden_dim, n_channels)
 
     def forward(self, x: Tensor) -> Tensor:
         '''Forward pass'''
-        # Set initial hidden and cell states
-        h0 = torch.zeros(self.num_layers, self.hidden_size, self.hidden_size).to(x.device)
-        c0 = torch.zeros(self.num_layers, self.hidden_size, self.hidden_size).to(x.device)
-
         # Encode input
         x = self.fc_in(x)
 
         # Forward propagate LSTM
-        out, _ = self.lstm(x, (h0, c0))
+        out = self.lstm(x)[0][:, -1, :].unsqueeze(1)
 
         # Decode the hidden state of the last time step
-        out = self.fc_out(out[:, -1, :])
+        out = self.fc_out(out)
         return out
+    
+    
+class AEForecasting(LSTMForecasting):
+    '''AE-Wrapper for forecasting networks'''
+    
+    def __init__(
+        self, 
+        autoencoder: Autoencoder,
+        hidden_dim: int, 
+        num_layers: int = 1, 
+        dropout: float = 0.0,
+        fit_autoencoder = False,
+    ):
+        super().__init__(
+            n_channels=autoencoder.output_dim,
+            hidden_dim=hidden_dim, 
+            sequence_length=autoencoder.output_dim_2, 
+            num_layers=num_layers, 
+            dropout=dropout,
+            )
+        
+        # freeze autoencoder if already trained
+        if not fit_autoencoder:
+            autoencoder.eval()
+            for param in autoencoder.params:
+                param.requires_grad = False
+        self.autoencoder = autoencoder
+        
+    def forward(self, x):
+        # encode input x
+        x = self.autoencoder.encode(x)
+        
+        # forecast encoded input
+        x = self.fc_in(x)
+        
+        # decode output
+        return self.autoencoder.decode(x)
+        
+        

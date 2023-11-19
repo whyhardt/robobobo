@@ -260,6 +260,31 @@ def default_inputs_training_autoencoder():
         'num_heads': [int, 'Number of heads of the transformer', 8, 'Number of heads: '],
         'train_ratio': [float, 'Ratio of training data to total data', 0.8, 'Training ratio: '],
         'learning_rate': [float, 'Learning rate of the GAN', 0.0001, 'Learning rate: '],
+        'lr_scheduler': [float, 'Learning rate scheduler', None, 'Learning rate scheduler: '],
+    }
+    return kw_dict
+
+
+def default_inputs_training_forecast():
+    kw_dict = {
+        'ddp': [bool, 'Activate distributed training', False, 'Distributed training is active'],
+        'load_checkpoint': [bool, 'Load a pre-trained AE', False, 'Loading a trained autoencoder model'],
+        'ddp_backend': [str, 'Backend for the DDP-Training; "nccl" for GPU; "gloo" for CPU;', 'nccl', 'DDP backend: '],
+        'path_dataset': [str, 'Path to the dataset', os.path.join('data', 'gansEEGTrainingData.csv'), 'Dataset: '],
+        'path_checkpoint': [str, 'Path to a trained model to continue training', os.path.join('trained_fc', 'checkpoint.pt'), 'Checkpoint: '],
+        'path_autoencoder': [str, 'Path to a trained autoencoder', '', 'Autoencoder: '],
+        'save_name': [str, 'Name to save model', None, 'Model save name: '],
+        # 'conditions': [str, '** Conditions to be used', '', 'Conditions: '],
+        'activation': [str, 'Activation function of the AE components; Options: [relu, leakyrelu, sigmoid, tanh, linear]', 'sigmoid', 'Activation function: '],
+        'n_epochs': [int, 'Number of epochs to train for', 100, 'Number of epochs: '],
+        'batch_size': [int, 'Batch size', 128, 'Batch size: '],
+        'sample_interval': [int, 'Interval of epochs between saving samples', 100, 'Sample interval: '],
+        'hidden_dim': [int, 'Hidden dimension of the transformer', 256, 'Hidden dimension: '],
+        'num_layers': [int, 'Number of layers of the transformer', 2, 'Number of layers: '],
+        'forecast_length': [int, 'Length of the forecast', 1, 'Forecast length: '],
+        'train_ratio': [float, 'Ratio of training data to total data', 0.8, 'Training ratio: '],
+        'learning_rate': [float, 'Learning rate of the GAN', 0.0001, 'Learning rate: '],
+        'lr_scheduler': [float, 'Learning rate scheduler', None, 'Learning rate scheduler: '],
     }
     return kw_dict
 
@@ -394,6 +419,9 @@ def parse_arguments(arguments, kw_dict=None, file=None):
         elif file == 'autoencoder_training_main.py':
             system_args = default_inputs_training_autoencoder()
             helper = HelperAutoencoder(system_args)
+        elif file == 'forecast_training_main.py':
+            system_args = default_inputs_training_forecast()
+            helper = Helper(system_args)
         else:
             raise ValueError(f'File {file} not recognized.')
     else:
