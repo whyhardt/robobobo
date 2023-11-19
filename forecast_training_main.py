@@ -32,6 +32,7 @@ def main():
         'save_name': default_args['save_name'],
         'sample_interval': default_args['sample_interval'],
         # 'conditions': default_args['conditions'],
+        'path_autoencoder': default_args['path_autoencoder'],
         'n_epochs': default_args['n_epochs'],
         'batch_size': default_args['batch_size'],
         'train_ratio': default_args['train_ratio'],
@@ -50,7 +51,7 @@ def main():
         'world_size': torch.cuda.device_count() if torch.cuda.is_available() else mp.cpu_count(),
         'history': None,
         'trained_epochs': 0,
-        'sequence_length': 16,
+        'sequence_length': 17,
         'n_channels': 0,
     }
     

@@ -33,7 +33,10 @@ def init_fc(
             raise ValueError(f"Autoencoder file '{path_autoencoder}' not found.")
         
         ae_dict = torch.load(path_autoencoder, map_location=torch.device('cpu'))
-        autoencoder = init_ae(n_channels, sequence_length, load_checkpoint=True, path_checkpoint=path_autoencoder, **ae_dict['configuration'])
+        # autoencoder = init_ae(n_channels, sequence_length, load_checkpoint=True, path_checkpoint=path_autoencoder, **ae_dict['configuration'])
+        ae_dict['configuration']['device'] = device
+        autoencoder = init_ae(n_channels, sequence_length-1, **ae_dict['configuration'])
+        autoencoder.load_state_dict(ae_dict['model'])
         model = AEForecasting(autoencoder, hidden_dim, num_layers, dropout).to(device)
         
     return model
