@@ -107,20 +107,24 @@ def main():
 
     model = init_ae(**opt)
     
-    # Populate model configuration    
-    history = {}
-    for key in opt.keys():
-        if (not key == 'history') | (not key == 'trained_epochs'):
-            history[key] = [opt[key]]
-    history['trained_epochs'] = []
+    # # Populate model configuration    
+    # history = {}
+    # for key in opt.keys():
+    #     if (not key == 'history') | (not key == 'trained_epochs'):
+    #         history[key] = [opt[key]]
+    # history['trained_epochs'] = []
 
-    model_dict = torch.load(opt['path_checkpoint'])
-    if model_dict is not None:
-        # update history
-        for key in history.keys():
-            history[key] = model_dict['configuration']['history'][key] + history[key]
+    # if default_args['load_checkpoint']:
+    #     model_dict = torch.load(opt['path_checkpoint'])
+    # else:
+    #     model_dict = None
+        
+    # if model_dict is not None:
+    #     # update history
+    #     for key in history.keys():
+    #         history[key] = model_dict['configuration']['history'][key] + history[key]
 
-    opt['history'] = history
+    # opt['history'] = history
 
     if opt['ddp']:
         trainer = AEDDPTrainer(model, opt)

@@ -290,7 +290,6 @@ class ValueRoboboboNetwork(ValueNetwork):
 
 class BasicFeatureExtractor(BaseFeaturesExtractor):
     """
-    This extractor is based on a transformer encoder with a follow-up LSTM.
     :param observation_space: (gym.Space)
     :param features_dim: (int) Number of features extracted.
         This corresponds to the number of unit for the last layer.
@@ -303,6 +302,26 @@ class BasicFeatureExtractor(BaseFeaturesExtractor):
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(observations)
+    
+    
+class LSTMFeatureExtractor(BaseFeaturesExtractor):
+    """
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self, observation_space: spaces.Box, feature_dim: int = 256):
+        super().__init__(observation_space, feature_dim)
+
+        self.linear = nn.Linear(observation_space.shape[-1], feature_dim)
+        self.lstm = nn.LSTM(feature_dim, feature_dim, batch_first=True, num_layers=1)
+        self.linear_out = nn.Linear(feature_dim, feature_dim)
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        x = self.linear(observations)
+        x = self.lstm(x)
+        return self.linear_out(x[0][:, -1, :])
 
 
 class AttnLstmFeatureExtractor(BaseFeaturesExtractor):

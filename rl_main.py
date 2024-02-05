@@ -38,11 +38,11 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
+        'load_checkpoint': False,
         'file_checkpoint': 'trained_rl/checkpoint.pt',
         'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
-        'file_ae': 'trained_ae/transformer_ae_140_800.pt',
+        'file_ae': 'trained_ae/transformer_ae.pt',
         'checkpoint_interval': 10,
 
         # rl setup parameters
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         'agent': 'sac',
         'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
-        'recurrent': False,
+        'recurrent': True,
 
         # training parameters
         'num_epochs': 1,
@@ -63,8 +63,8 @@ if __name__ == '__main__':
         'parameter_update_interval': 50,
 
         # network parameters
-        'hidden_dim': 64,
-        'num_layers': 2,
+        'hidden_dim': 32,
+        'num_layers': 3,
         'num_layers_sub': 4,
         'init_w': None,
 
@@ -151,7 +151,7 @@ if __name__ == '__main__':
         policy = 'MlpPolicy'
 
     if cfg['policy'] == 'MlpPolicy' and cfg['recurrent']:
-        feature_extractor = AttnLstmFeatureExtractor
+        feature_extractor = LSTMFeatureExtractor
     elif cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm' and cfg['recurrent']:
         feature_extractor = BasicFeatureExtractor
     else:
