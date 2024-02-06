@@ -433,7 +433,7 @@ class AETrainer(Trainer):
 
         # optimizer and loss
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        self.loss = torch.nn.MSELoss()
+        self.loss = torch.nn.L1Loss()
         if self.lr_scheduler is not None:
             self.lr_schedule = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, factor = self.lr_scheduler, patience=10, verbose=True)
         else:

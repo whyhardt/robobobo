@@ -38,11 +38,11 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': True,
+        'load_checkpoint': False,
         'file_checkpoint': 'trained_rl/checkpoint.pt',
-        'file_data': os.path.join('stock_data', 'portfolio_custom140_SHORT.csv'),
+        'file_data': os.path.join('stock_data', 'portfolio_custom129_SHORT.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
-        'file_ae': 'trained_ae/dummy_ae.pt',
+        'file_ae': 'trained_ae/ae129.pt',
         'checkpoint_interval': 10,
 
         # rl setup parameters
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         'recurrent': True,
 
         # training parameters
-        'num_epochs': 1,
+        'num_epochs': 100,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,
