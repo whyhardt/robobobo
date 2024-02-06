@@ -461,9 +461,9 @@ class AETrainer(Trainer):
             # 'conditions': opt['conditions'] if 'conditions' in opt else None,
             'channel_label': opt['channel_label'] if 'channel_label' in opt else None,
             'trained_epochs': self.trained_epochs,
-            'input_dim': opt['input_dim'],
-            'output_dim': opt['output_dim'],
-            'output_dim_2': opt['output_dim_2'],
+            'n_channels': opt['n_channels'],
+            'channels_out': opt['channels_out'],
+            'timeseries_out': opt['timeseries_out'],
             'num_layers': opt['num_layers'],
             'num_heads': opt['num_heads'],
             'activation': opt['activation'],
@@ -575,9 +575,9 @@ class AETrainer(Trainer):
         if model is None:
             model = self.model
 
-        if update_history:
-            self.configuration['trained_epochs'] = self.trained_epochs
-            self.configuration['history']['trained_epochs'] = self.configuration['history']['trained_epochs'] + [self.trained_epochs]
+        # if update_history:
+        #     self.configuration['trained_epochs'] = self.trained_epochs
+        #     self.configuration['history']['trained_epochs'] = self.configuration['history']['trained_epochs'] + [self.trained_epochs]
         
         checkpoint_dict = {
             'model': model.state_dict(),
