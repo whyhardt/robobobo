@@ -41,7 +41,7 @@ class Environment(gym.Env):
 
         # shape of observation space: (cash, portfolio, stock_prices)
         if recurrent:
-            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(observation_length + 2, stock_data.shape[-1]), dtype=np.float32)
+            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(encoder.output_dim_2, encoder.output_dim), dtype=np.float32)
         else:
             if self.encoder is not None:
                 obs_shape = (1, 1+stock_data.shape[-1]+self.encoder.output_dim)
@@ -258,15 +258,17 @@ class Environment(gym.Env):
         if self.encoder is not None:
             with torch.no_grad():
                 stock_prices = self.encode(torch.tensor(stock_prices.reshape([1] + list(stock_prices.shape)), dtype=torch.float32)).numpy()
+                stock_prices = np.reshape(stock_prices, (*stock_prices.shape[1:],))
 
         if not self._recurrent:
             stock_prices = np.reshape(stock_prices, (-1,))
             obs = np.concatenate((cash, portfolio, stock_prices), dtype=np.float32).reshape(1, -1)
         else:
             # obs_space = np.concatenate((portfolio, stock_prices), axis=1)
-            cash = np.tile(cash, (1, stock_prices.shape[-1]))
+            # cash = np.tile(cash, (1, stock_prices.shape[-1]))
             # portfolio = np.tile(portfolio, (self.observation_length, 1))
-            obs = np.concatenate((cash, portfolio.reshape(1, -1), stock_prices), axis=0, dtype=np.float32)
+            # obs = np.concatenate((cash, portfolio.reshape(1, -1), stock_prices), axis=0, dtype=np.float32)
+            obs = stock_prices
 
         return obs
 

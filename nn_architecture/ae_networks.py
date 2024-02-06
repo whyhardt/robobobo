@@ -189,7 +189,7 @@ class TransformerDoubleAutoencoder(Autoencoder):
         self.linear_dec_out = nn.Linear(hidden_dim, input_dim)
 
     def forward(self, data):
-        x = self.encode(data.to(self.device))
+        x = self.encode(data)#.to(self.device))
         x = self.decode(x)
         return x
 

@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import torch
 from matplotlib import pyplot as plt
+from helpers.init_ae import init_ae
 
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO, SAC, DDPG, TD3
@@ -26,7 +27,6 @@ from utils.ae_dataloader import create_dataloader
 from training import simple_train, test
 from environment import Environment
 from nn_architecture.rl_networks import *
-from nn_architecture.ae_networks import TransformerAutoencoder
 
 import gymnasium as gym
 
@@ -38,11 +38,11 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
+        'load_checkpoint': True,
         'file_checkpoint': 'trained_rl/checkpoint.pt',
-        'file_data': os.path.join('stock_data', 'portfolio_custom140_2008_2022_normrange.csv'),
+        'file_data': os.path.join('stock_data', 'portfolio_custom140_SHORT.csv'),
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
-        'file_ae': 'trained_ae/transformer_ae.pt',
+        'file_ae': 'trained_ae/dummy_ae.pt',
         'checkpoint_interval': 10,
 
         # rl setup parameters
@@ -127,8 +127,9 @@ if __name__ == '__main__':
     if cfg['env_id'] == 'Custom':
         if cfg['file_ae'] is not None and cfg['file_ae'] != '':
             state_dict = torch.load(cfg['file_ae'], map_location=torch.device('cpu'))
-            encoder = TransformerAutoencoder(**state_dict['model'], seq_len=state_dict['general']['seq_len'])
-            encoder.load_state_dict(state_dict['model']['state_dict'])
+            encoder = init_ae(**state_dict['configuration'], sequence_length=16)
+            encoder.load_state_dict(state_dict['model'])
+            encoder.to(torch.device('cpu'))
             encoder.eval()
         else:
             encoder = None
@@ -152,7 +153,7 @@ if __name__ == '__main__':
 
     if cfg['policy'] == 'MlpPolicy' and cfg['recurrent']:
         feature_extractor = LSTMFeatureExtractor
-    elif cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm' and cfg['recurrent']:
+    elif (cfg['policy'] == 'Attn' or cfg['policy'] == 'AttnLstm') and cfg['recurrent']:
         feature_extractor = BasicFeatureExtractor
     else:
         feature_extractor = None

@@ -4,7 +4,6 @@ import os.path
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from matplotlib import pyplot as plt
 
 # import investpy
 
@@ -27,9 +26,9 @@ if __name__ == '__main__':
 	save_single_file = False
 	max_data_range = False
 	mask_nan = True
-	dir_base = r'..\stock_data'
+	dir_base = 'stock_data'
 	dir_single_files = 'portfolio_custom140'
-	file_all_stocks = 'portfolio_custom145_2008_2022_normrange.csv'
+	file_all_stocks = 'portfolio_custom145_2002_2023_normrange.csv'
 
 	if not os.path.isdir(os.path.join(dir_base, dir_single_files)):
 		os.mkdir(os.path.join(dir_base, dir_single_files))
@@ -62,9 +61,10 @@ if __name__ == '__main__':
 
 	# forex and crypto pairs
 	forex_pairs = ["EUR=X", "JPY=X", "GBP=X", "CHF=X", "AUD=X", "CAD=X"]
-	cryptocurrencies = ["BTC-USD", "ETH-USD", "XRP-USD", "LTC-USD", "BCH-USD", "ADA-USD", "DOGE-USD", "LINK-USD",
-						"XLM-USD", "ATOM-USD", "AVAX-USD", "DOT-USD", "ALGO-USD", "VET-USD", "XTZ-USD",
-						"SOL-USD", "AAVE-USD", "MKR-USD"]
+	# cryptocurrencies = ["BTC-USD", "ETH-USD", "XRP-USD", "LTC-USD", "BCH-USD", "ADA-USD", "DOGE-USD", "LINK-USD",
+	# 					"XLM-USD", "ATOM-USD", "AVAX-USD", "DOT-USD", "ALGO-USD", "VET-USD", "XTZ-USD",
+	# 					"SOL-USD", "AAVE-USD", "MKR-USD"]
+	cryptocurrencies = ["BTC-USD", "ETH-USD"]
 	forex_pairs = list(set(forex_pairs))
 	cryptocurrencies = list(set(cryptocurrencies))
 	forex_pairs.sort()
@@ -76,8 +76,8 @@ if __name__ == '__main__':
 	# define start and end date for data download
 	# yf_start = pd.Timestamp('2008-01-01')
 	# yf_end = pd.Timestamp('2022-12-31')
-	yf_start = '2008-01-01'
-	yf_end = '2022-12-31'
+	yf_start = '2002-01-01'
+	yf_end = '2023-12-31'
 
 	# download stocks given in list; remove if not found for given time period
 	stock_data = []
