@@ -34,7 +34,7 @@ import gymnasium as gym
 def main(
     load_checkpoint=False,
     file_checkpoint='trained_rl/checkpoint.pt',
-    file_data='stock_data/portfolio_custom129_SHORT.csv',
+    file_data='stock_data/portfolio_custom129_2002_2023_normrange.csv',
     file_ae='trained_ae/ae129.pt',
     num_epochs=1e2, 
     checkpoint_interval=1e1,
@@ -260,4 +260,4 @@ def main(
 
 
 if __name__ == '__main__':
-    main()
+    main(file_data='stock_data/portfolio_custom129_SHORT.csv')
