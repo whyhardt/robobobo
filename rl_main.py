@@ -41,6 +41,8 @@ def main(
     num_random_actions=5e2,
     batch_size=32,
     learning_rate=3e-4,
+    hidden_dim=32,
+    num_layers=3,
     ):
     """main file for training and testing the SAC-agent on the environment"""
 
@@ -73,8 +75,8 @@ def main(
         'parameter_update_interval': 50,
 
         # network parameters
-        'hidden_dim': 32,
-        'num_layers': 3,
+        'hidden_dim': hidden_dim,
+        'num_layers': num_layers,
         'num_layers_sub': 4,
         'init_w': None,
 
