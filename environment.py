@@ -34,10 +34,11 @@ class Environment(gym.Env):
 
         # set action and observation space
         # shape of action space: ([sell (=0) or buy (=1)]*[stock1, stock2, ...])
+        action_dimension = stock_data.shape[-1] if encoder is None else encoder.output_dim
         if discrete_actions:
-            self.action_space = gym.spaces.MultiBinary(stock_data.shape[-1])
+            self.action_space = gym.spaces.MultiBinary(action_dimension)
         else:
-            self.action_space = gym.spaces.Box(low=-1, high=1, shape=(stock_data.shape[-1],), dtype=np.float32)
+            self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dimension,), dtype=np.float32)
 
         # shape of observation space: (cash, portfolio, stock_prices)
         if recurrent:
@@ -93,6 +94,17 @@ class Environment(gym.Env):
 
         if self._discrete_actions:
             action = np.array([self._transform_binary_action[a] for a in action])
+            
+        if self.encoder is not None:
+            # train agent to act on encoded space 
+            # --> Since AE discovers underlying, simplified structure (i.e. dependencies between stocks)
+            # --> Agent should also be able to act on this simplified structure
+            # decode to original space to place orders
+            # for decoding:
+            # Original decoder space is [0, 1]
+            # Target space is [-1, 1]
+            with torch.no_grad():
+                action = np.tanh(self.encoder.decode(torch.tensor(action.reshape(1, -1), dtype=torch.float32)).numpy()).reshape(-1)
 
         self._cash_t_1 = self.total_equity()
         self._portfolio_t_1 = deepcopy(self.portfolio)

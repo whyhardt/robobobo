@@ -537,5 +537,63 @@ class AttnLstmActorCriticPolicyOn(ActorCriticPolicy):
 
 
 
-# class TemperatureNetwork(nn.Module):
-#     """Temperature network for SAC which takes in Q-Value """
+class RecurrentPolicy(nn.Module):
+    """
+    Custom network for policy and value function.
+    It receives as input the features extracted by the features extractor.
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+        self,
+        feature_dim: int,
+        last_layer_dim_pi: int = 256,
+        last_layer_dim_vf: int = 256,
+        num_layers: int = 3,
+    ):
+        super().__init__()
+
+        # IMPORTANT:
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = last_layer_dim_pi
+        self.latent_dim_vf = last_layer_dim_vf
+
+        self.activation = nn.Tanh()
+
+        self.hidden_state_pi = torch.ones((1, 1, feature_dim))
+        self.hidden_state_vf = torch.ones((1, 1, feature_dim))
+        
+        # make multiple linear layers
+        # last layer has to be of dimension last_layer_dim_[pi, vf]
+        # layer before last layer needs to be of dimension feature_dim
+        nn_container = nn.ModuleList()
+        for l in range(num_layers):
+            nn_container.append(nn.Linear(feature_dim, feature_dim))
+        self.output_layer = nn.Linear(feature_dim, last_layer_dim_pi)
+        
+        # policy network
+        self.pi_hidden = deepcopy(nn_container)
+        self.pi_out = nn.Linear(feature_dim, last_layer_dim_pi)
+
+        # value network
+        self.pi_hidden = deepcopy(nn_container)
+        self.pi_out = nn.Linear(feature_dim, last_layer_dim_vf)
+
+    def forward(self, features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
+            If all layers are shared, then ``latent_policy == latent_value``
+        """
+        return self.forward_actor(features), self.forward_critic(features)
+
+    def forward_actor(self, features: torch.Tensor) -> torch.Tensor:
+        self.hidden_state_pi = self.activation(self.pi_hidden(features*self.hidden_state_pi))
+        return self.activation(self.pi_out(self.hidden_state_pi))
+
+    def forward_critic(self, features: torch.Tensor) -> torch.Tensor:
+        self.hidden_state_vf = self.activation(self.vf_hidden(features*self.hidden_state_vf))
+        return self.activation(self.vf_out(self.hidden_state_vf))
+    

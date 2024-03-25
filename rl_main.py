@@ -53,7 +53,7 @@ if __name__ == '__main__':
         'recurrent': True,
 
         # training parameters
-        'num_epochs': 100,
+        'num_epochs': 1e2,
         'num_actions_per_epoch': 1e3,
         'num_random_actions': 5e2,
         'batch_size': 32,
