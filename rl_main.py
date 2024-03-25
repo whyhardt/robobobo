@@ -31,19 +31,29 @@ from nn_architecture.rl_networks import *
 import gymnasium as gym
 
 
-if __name__ == '__main__':
+def main(
+    load_checkpoint=False,
+    file_checkpoint='trained_rl/checkpoint.pt',
+    file_data='stock_data/portfolio_custom129_SHORT.csv',
+    file_ae='trained_ae/ae129.pt',
+    num_epochs=1e2, 
+    checkpoint_interval=1e1,
+    num_random_actions=5e2,
+    batch_size=32,
+    learning_rate=3e-4,
+    ):
     """main file for training and testing the SAC-agent on the environment"""
 
     # warnings off
     warnings.filterwarnings("ignore")
     cfg = {
         # general parameters
-        'load_checkpoint': False,
-        'file_checkpoint': 'trained_rl/checkpoint.pt',
-        'file_data': os.path.join('stock_data', 'portfolio_custom129_SHORT.csv'),
+        'load_checkpoint': load_checkpoint,
+        'file_checkpoint': file_checkpoint,
+        'file_data': file_data,
         'file_predictor': [None, None],  # ['trained_gan/real_gan_1k.pt', 'trained_gan/mvgavg_gan_10k.pt',],
-        'file_ae': 'trained_ae/ae129.pt',
-        'checkpoint_interval': 10,
+        'file_ae': file_ae,
+        'checkpoint_interval': checkpoint_interval,
 
         # rl setup parameters
         'train': True,
@@ -53,11 +63,11 @@ if __name__ == '__main__':
         'recurrent': True,
 
         # training parameters
-        'num_epochs': 1e2,
+        'num_epochs': num_epochs,
         'num_actions_per_epoch': 1e3,
-        'num_random_actions': 5e2,
-        'batch_size': 32,
-        'learning_rate': 3e-4,
+        'num_random_actions': num_random_actions,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
         'train_test_split': 0.8,
         'replay_buffer_size': int(1e4),
         'parameter_update_interval': 50,
@@ -247,3 +257,7 @@ if __name__ == '__main__':
     mean, std = evaluate_policy(agent, env, n_eval_episodes=1, deterministic=True)
     print(f"Average reward over {1} episodes: {mean:.2f} +/- {std:.2f}")
     # test(env, agent, deterministic=True, title=cfg['file_checkpoint'].split('/')[-1].split('.')[0])
+
+
+if __name__ == '__main__':
+    main()
