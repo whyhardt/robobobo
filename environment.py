@@ -28,7 +28,7 @@ class Environment(gym.Env):
                  encoder: Optional[Autoencoder] = None,
                  test = False,
                  ):
-
+        
         # set encoder first, since it defines the observation space
         self.encoder = encoder
 
@@ -94,7 +94,7 @@ class Environment(gym.Env):
 
         if self._discrete_actions:
             action = np.array([self._transform_binary_action[a] for a in action])
-            
+        
         if self.encoder is not None:
             # train agent to act on encoded space 
             # --> Since AE discovers underlying, simplified structure (i.e. dependencies between stocks)
@@ -111,7 +111,15 @@ class Environment(gym.Env):
 
         if self.cash > 0:
             self._buy(action)
+            if self._test:
+                # collect cash after buy orders
+                cash_after_buy = deepcopy(self.cash)
             self._sell(action)
+            if self._test:
+                # collect cash after sell orders
+                cash_after_sell = deepcopy(self.cash)
+        if self._test and len(self._cash_episode) < 100:
+            print(f'Cash after buy: {cash_after_buy}, Cash after sell: {cash_after_sell}, Total Equity: {self.total_equity()}')
 
         if self.cash < self._cash_threshold:
             self.cash = 0.0

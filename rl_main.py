@@ -36,6 +36,7 @@ def main(
     file_checkpoint='trained_rl/checkpoint.pt',
     file_data='stock_data/portfolio_custom129_2002_2023_normrange.csv',
     file_ae='trained_ae/ae129.pt',
+    env_id='Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
     num_epochs=1e2, 
     checkpoint_interval=1e1,
     num_random_actions=5e2,
@@ -60,7 +61,7 @@ def main(
         # rl setup parameters
         'train': True,
         'agent': 'sac',
-        'env_id': 'Custom',  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
+        'env_id': env_id,  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
         'recurrent': True,
 
@@ -262,4 +263,8 @@ def main(
 
 
 if __name__ == '__main__':
-    main(file_data='stock_data/portfolio_custom129_SHORT.csv')
+    main(
+        file_data='stock_data/portfolio_custom129_2002_2023_normrange.csv',
+        num_epochs=0,
+        hidden_dim=256,
+        )
