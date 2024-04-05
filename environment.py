@@ -42,7 +42,10 @@ class Environment(gym.Env):
 
         # shape of observation space: (cash, portfolio, stock_prices)
         if recurrent:
-            self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(encoder.output_dim_2, encoder.output_dim), dtype=np.float32)
+            if self.encoder is not None:
+                self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(encoder.output_dim_2, encoder.output_dim), dtype=np.float32)
+            else:
+                self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(observation_length, stock_data.shape[-1]), dtype=np.float32)
         else:
             if self.encoder is not None:
                 obs_shape = (1, 1+stock_data.shape[-1]+self.encoder.output_dim)
@@ -140,7 +143,7 @@ class Environment(gym.Env):
         if (terminated or truncated) and self._test:
             print(f'Test done. Total Equity: {self.total_equity()}')
             self.plot_results()
-            print(f'Portfolio: {self.portfolio}')
+            # print(f'Portfolio: {self.portfolio}')
 
             # plot actions taken
 

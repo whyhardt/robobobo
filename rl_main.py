@@ -15,7 +15,6 @@ import numpy as np
 import pandas as pd
 import torch
 from matplotlib import pyplot as plt
-from helpers.init_ae import init_ae
 
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO, SAC, DDPG, TD3
@@ -23,6 +22,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_checker import check_env
 
 # from nn_architecture.agents import SACAgent, DDPGAgent, TD3Agent
+from helpers.init_ae import init_ae
 from utils.ae_dataloader import create_dataloader
 from training import simple_train, test
 from environment import Environment
@@ -60,10 +60,10 @@ def main(
 
         # rl setup parameters
         'train': True,
-        'agent': 'sac',
+        'agent': 'ppo_cont',
         'env_id': env_id,  # Custom, Pendulum-v1, MountainCarContinuous-v0, LunarLander-v2
         'policy': 'MlpPolicy',  # MlpPolicy, Attn, AttnLstm
-        'recurrent': True,
+        'recurrent': False,
 
         # training parameters
         'num_epochs': num_epochs,
@@ -127,17 +127,17 @@ def main(
                            False),
                  }
 
-    print('Initializing framework...')
-
-    # load data
-    training_data = pd.read_csv(cfg['file_data'], index_col=0, header=0)
-    portfolio_names = training_data.columns
-    training_data = training_data.to_numpy(dtype=np.float32)
-    test_data = training_data[int(cfg['train_test_split']*len(training_data)):]
-    training_data = training_data[:int(cfg['train_test_split']*len(training_data))]
+    print('Initializing framework...')        
 
     # load environment
     if cfg['env_id'] == 'Custom':
+        
+        training_data = pd.read_csv(cfg['file_data'], index_col=0, header=0)
+        portfolio_names = training_data.columns
+        training_data = training_data.to_numpy(dtype=np.float32)
+        test_data = training_data[int(cfg['train_test_split']*len(training_data)):]
+        training_data = training_data[:int(cfg['train_test_split']*len(training_data))]
+        
         if cfg['file_ae'] is not None and cfg['file_ae'] != '':
             state_dict = torch.load(cfg['file_ae'], map_location=torch.device('cpu'))
             encoder = init_ae(**state_dict['configuration'], sequence_length=16)
@@ -264,7 +264,9 @@ def main(
 
 if __name__ == '__main__':
     main(
-        file_data='stock_data/portfolio_custom129_2002_2023_normrange.csv',
-        num_epochs=0,
-        hidden_dim=256,
+        file_data=None, #'stock_data/portfolio_custom129_2002_2023_normrange.csv',
+        file_ae=None, #'trained_ae/ae129.pt',
+        num_epochs=1,
+        hidden_dim=32,
+        env_id='MountainCarContinuous-v0',
         )

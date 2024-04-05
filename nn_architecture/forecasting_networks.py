@@ -47,6 +47,61 @@ class LSTMForecasting(nn.Module):
         out = self.fc_out(out)
         return out
     
+
+class TradeNet(nn.Module):
+    '''LSTM network for trading'''
+
+    def __init__(
+        self, 
+        n_channels: int, 
+        hidden_dim: int, 
+        sequence_length: int,
+        n_channels_out: int = None, 
+        num_layers: int = 1, 
+        dropout: float = 0.0,
+        ):
+        super().__init__()
+        
+        # network parameters
+        self.hidden_size = hidden_dim
+        self.num_layers = num_layers
+        self.sequence_length = sequence_length
+        self.n_channels_out = n_channels_out if n_channels_out is not None else n_channels
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # network layers
+        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, dropout=dropout, batch_first=True)
+        self.fc_in = nn.Linear(n_channels, hidden_dim)
+        self.fc_out = nn.Linear(hidden_dim, self.n_channels_out)
+        
+        # activation
+        self.act_orders = nn.Tanh()
+        self.act_softmax = nn.Softmax(dim=-1)
+        self.act_buy = nn.ReLU()
+        self.act_sell = lambda x: torch.where(x < 0, x, torch.zeros_like(x))
+
+    def forward(self, stocks: Tensor) -> Tensor:
+        '''Forward pass'''
+        # Encode input
+        stocks = self.fc_in(stocks)
+
+        # Forward propagate LSTM
+        stocks = self.lstm(stocks)[0][:, -1, :]
+
+        # Decode the hidden state of the last time step
+        orders_all = self.act_orders(self.fc_out(stocks))
+        
+        # split orders into buy and sell orders
+        # index_buy = torch.where(orders_all > 1)        
+        # orders_all[index_buy] = self.activation_orders(orders_all[index_buy])
+        orders_buy = self.act_buy(orders_all)
+        # orders_buy = self.act_softmax(orders_buy)
+        # scale all orders to sum up to 1 but keep 0s
+        orders_buy = orders_buy / torch.sum(orders_buy, dim=-1, keepdim=True)
+        orders_sell = self.act_sell(orders_all)
+        
+        return orders_buy, orders_sell
+    
     
 class AEForecasting(LSTMForecasting):
     '''AE-Wrapper for forecasting networks'''
