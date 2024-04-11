@@ -22,6 +22,7 @@ def main(
     num_layers=3,
     sequence_length=10,
     dropout=0.,
+    portfolio_input=False,
     ):
     """main file for training and testing a forecasting network"""
     
@@ -51,12 +52,13 @@ def main(
         'num_layers': num_layers,
         'num_layers_sub': 4,
         'init_w': None,
+        'portfolio_input': portfolio_input,
 
         # environment
         'time_limit': 365,
         'cash_init': 10000,
         'commission': .001,
-        'reward_scaling': 1e-4,
+        'reward_scaling': 1e-2,
     }
     
     training_data = pd.read_csv(cfg['file_data'], index_col=0, header=0)
@@ -89,16 +91,14 @@ def main(
         cfg['sequence_length'], 
         encoder.input_dim, 
         cfg['num_layers'], 
-        cfg['dropout']
+        cfg['dropout'],
+        n_portfolio=training_data.shape[-1] if cfg['portfolio_input'] else 0
         ).to(cfg['device'])
     
     # set loss function and equity calculation function
     def trade_loss(equity_trade):
         # return torch.mean(torch.sum(equity_keep - equity_trade, dim=-1))
         return - torch.mean(equity_trade)
-    
-    def get_equity(stocks, orders):
-        return torch.sum(stocks * orders, dim=-1)
     
     # set optimizer
     optim = torch.optim.Adam(robobobo.parameters(), lr=cfg['learning_rate'])
@@ -117,24 +117,36 @@ def main(
         for i in range(0, len(training_data), cfg['batch_size']):
             # get batch
             batch = training_data[i:i+cfg['batch_size']]
-            # get stocks and orders
-            stocks_history = batch[:, :, :-1]
             
             # zero gradients
             optim.zero_grad()
             # forward pass
             with torch.no_grad():
                 encoded_batch = encoder.encode(batch[:, :-1, :])
-            orders_buy, orders_sell = robobobo(encoded_batch)
+            if robobobo.portfolio:
+                # set a random portfolio of size (batch_size, 1, n_portfolio) with n random integers between 0 and 100
+                rnd_portfolio = torch.randint(0, 100, (batch.shape[0], 1, training_data.shape[-1]), device=cfg['device'], dtype=torch.int)
+                n_zeros = torch.randint(training_data.shape[-1]//2, training_data.shape[-1], (batch.shape[0],), device=cfg['device'], dtype=torch.int)
+                for i in range(batch.shape[0]):
+                    index_zeros = torch.randint(0, training_data.shape[-1], (n_zeros[i],), device=cfg['device'], dtype=torch.int)
+                    rnd_portfolio[i, 0, index_zeros] = 0
+                orders_buy, orders_sell = robobobo(encoded_batch, rnd_portfolio)
+                rnd_portfolio = rnd_portfolio.squeeze(1)
+            else:
+                # continue without information about portfolio
+                orders_buy, orders_sell = robobobo(encoded_batch, None)
+            orders_sell = orders_sell * -1
             
             # calculate trade effectivity
-            diff_stocks = batch[:, -1, :] - batch[:, -2, :]
-            trade_buy = torch.sum(torch.prod(torch.stack((orders_buy, diff_stocks), dim=1), dim=1), dim=-1)
-            trade_sell = torch.sum(torch.prod(torch.stack((orders_sell, diff_stocks), dim=1), dim=1), dim=-1)
-            effectivity_trade = trade_buy + trade_sell
-                        
+            # diff_stocks = batch[:, -1, :] - batch[:, -2, :]
+            # trade_buy = torch.sum(torch.prod(torch.stack((orders_buy, diff_stocks), dim=1), dim=1), dim=-1)
+            # trade_sell = torch.sum(torch.prod(torch.stack((orders_sell, diff_stocks), dim=1), dim=1), dim=-1)
+            trade_sell = torch.sum((orders_sell * rnd_portfolio).int() * batch[:, -2, :], dim=-1)
+            trade_buy = orders_buy * trade_sell.unsqueeze(-1) * (batch[:, -1, :] - batch[:, -2, :])
+            effectivity_trade = trade_buy #+ trade_sell
+            
             # calculate loss
-            loss = trade_loss(effectivity_trade)
+            loss = trade_loss(effectivity_trade * cfg['reward_scaling'])
             epoch_loss.append(loss.item())
             
             # backward pass
@@ -215,16 +227,8 @@ def main(
         # get encoded stocks
         with torch.no_grad():
             # get orders
-            orders_buy, orders_sell = robobobo(encoder.encode(stocks_history))
+            orders_buy, orders_sell = robobobo(encoder.encode(stocks_history), portfolio if cfg['portfolio_input'] else None)
             orders_sell = orders_sell * -1
-            
-            # buying orders
-            invest = orders_buy * cash
-            buy_amounts[0, not_masked] = invest[0, not_masked] / stocks_history[0, -1, not_masked]
-            # update cash
-            cash = cash - torch.sum(invest, dim=-1)
-            # update portfolio
-            portfolio = portfolio + buy_amounts
             
             # selling orders
             sell_amounts[0, not_masked] = orders_sell[0, not_masked] * portfolio[0, not_masked]
@@ -233,6 +237,15 @@ def main(
             cash = cash + torch.sum(sell, dim=-1)
             # update portfolio
             portfolio = portfolio - sell_amounts
+            cash_after_sell = cash.item()
+            
+            # buying orders
+            invest = orders_buy * cash
+            buy_amounts[0, not_masked] = invest[0, not_masked] / stocks_history[0, -1, not_masked]
+            # update cash
+            cash = cash - torch.sum(invest, dim=-1)
+            # update portfolio
+            portfolio = portfolio + buy_amounts
             
             # check if any portfolio entry is nan
             # if torch.any(portfolio < 0):
@@ -247,15 +260,17 @@ def main(
             value_portfolio = torch.sum(portfolio * stocks_next, dim=-1)
             total_equity = cash + value_portfolio
             total_equity_array.append(total_equity.item())
-            cash_array.append(cash.item())
+            cash_array.append(cash_after_sell)
             equity_avg_array.append(value_portfolio_avg.item())
     
     # plot total equity
     fig, axs = plt.subplots(2)
-    axs[0].plot(total_equity_array)
-    axs[0].plot(equity_avg_array, linestyle='--')
+    axs[0].plot(total_equity_array, label='portfolio')
+    axs[0].plot(equity_avg_array, linestyle='--', label='benchmark')
     axs[0].axes.get_xaxis().set_visible(False)
     axs[0].set_title('Total Equity')
+    # set legend for axs[0]
+    axs[0].legend()
     axs[1].plot(cash_array)
     axs[1].set_title('Cash')
     plt.show()
@@ -264,5 +279,7 @@ def main(
 if __name__ == '__main__':
     main(
         load_checkpoint=True,
-        num_epochs=0
+        num_epochs=100,
+        hidden_dim=256,
+        portfolio_input=True,
         )

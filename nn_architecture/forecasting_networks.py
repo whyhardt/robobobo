@@ -59,6 +59,8 @@ class TradeNet(nn.Module):
         n_channels_out: int = None, 
         num_layers: int = 1, 
         dropout: float = 0.0,
+        n_portfolio: int = 0,
+        # cash: bool = True,
         ):
         super().__init__()
         
@@ -67,11 +69,17 @@ class TradeNet(nn.Module):
         self.num_layers = num_layers
         self.sequence_length = sequence_length
         self.n_channels_out = n_channels_out if n_channels_out is not None else n_channels
+        self.portfolio = n_portfolio > 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # network layers
-        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, dropout=dropout, batch_first=True)
-        self.fc_in = nn.Linear(n_channels, hidden_dim)
+        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, dropout=0.0, batch_first=True)
+        if n_portfolio == 0:
+            self.fc_in = nn.Linear(n_channels, hidden_dim)
+        else:
+            # intermediate step while encoding incoming stocks to encode also portfolio information into array
+            self.fc_in1 = nn.Sequential(nn.Linear(n_channels, n_portfolio), nn.Sigmoid())
+            self.fc_in2 = nn.Linear(n_portfolio, hidden_dim)
         self.fc_out = nn.Linear(hidden_dim, self.n_channels_out)
         
         # activation
@@ -80,10 +88,17 @@ class TradeNet(nn.Module):
         self.act_buy = nn.ReLU()
         self.act_sell = lambda x: torch.where(x < 0, x, torch.zeros_like(x))
 
-    def forward(self, stocks: Tensor) -> Tensor:
+    def forward(self, stocks: Tensor, portfolio: Tensor=None) -> Tensor:
         '''Forward pass'''
         # Encode input
-        stocks = self.fc_in(stocks)
+        if portfolio is None:
+            stocks = self.fc_in(stocks)
+        else:
+            # mark each entry of portfolio > 0 with 1 and rest with 0
+            portfolio = torch.where(portfolio > 0, torch.ones_like(portfolio), torch.zeros_like(portfolio))
+            stocks = self.fc_in1(stocks)
+            stocks = stocks + portfolio
+            stocks = self.fc_in2(stocks)
 
         # Forward propagate LSTM
         stocks = self.lstm(stocks)[0][:, -1, :]
@@ -99,6 +114,8 @@ class TradeNet(nn.Module):
         # scale all orders to sum up to 1 but keep 0s
         orders_buy = orders_buy / torch.sum(orders_buy, dim=-1, keepdim=True)
         orders_sell = self.act_sell(orders_all)
+        if portfolio is not None:
+            orders_sell = orders_sell * portfolio.squeeze(1)
         
         return orders_buy, orders_sell
     
