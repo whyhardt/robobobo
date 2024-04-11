@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import torch
+from copy import deepcopy
 
 from helpers.init_ae import init_ae
 from nn_architecture.forecasting_networks import TradeNet
@@ -86,10 +87,10 @@ def main(
     
     # set robobobo
     robobobo = TradeNet(
-        encoder.output_dim, 
+        encoder.output_dim if encoder is not None else training_data.shape[-1], 
         cfg['hidden_dim'], 
         cfg['sequence_length'], 
-        encoder.input_dim, 
+        encoder.input_dim if encoder is not None else training_data.shape[-1], 
         cfg['num_layers'], 
         cfg['dropout'],
         n_portfolio=training_data.shape[-1] if cfg['portfolio_input'] else 0
@@ -122,8 +123,11 @@ def main(
                 # zero gradients
                 optim.zero_grad()
                 # forward pass
-                with torch.no_grad():
-                    encoded_batch = encoder.encode(batch[:, :-1, :])
+                if encoder is not None:
+                    with torch.no_grad():
+                        encoded_batch = encoder.encode(batch[:, :-1, :])
+                else:
+                    encoded_batch = batch[:, :-1, :]
                 if robobobo.portfolio:
                     # set a random portfolio of size (batch_size, 1, n_portfolio) with n random integers between 0 and 100
                     rnd_portfolio = torch.randint(0, 100, (batch.shape[0], 1, training_data.shape[-1]), device=cfg['device'], dtype=torch.int)
@@ -240,8 +244,12 @@ def main(
         
         # get encoded stocks
         with torch.no_grad():
+            if encoder is not None:
+                encoded_stocks = encoder.encode(stocks_history)
+            else:
+                encoded_stocks = stocks_history
             # get orders
-            orders_buy, orders_sell = robobobo(encoder.encode(stocks_history), portfolio if cfg['portfolio_input'] else None)
+            orders_buy, orders_sell = robobobo(encoded_stocks, portfolio if cfg['portfolio_input'] else None)
             orders_sell = orders_sell * -1
             
             # selling orders
@@ -251,7 +259,7 @@ def main(
             cash = cash + torch.sum(sell, dim=-1)
             # update portfolio
             portfolio = portfolio - sell_amounts
-            cash_after_sell = cash.item()
+            cash_after_sell = deepcopy(cash.item())
             
             # buying orders
             invest = orders_buy * cash
@@ -270,13 +278,11 @@ def main(
             #     break
             
             # calculate total equity
-            value_portfolio_avg = torch.sum(avg_portfolio * stocks_next, dim=-1)
-            value_portfolio = torch.sum(portfolio * stocks_next, dim=-1)
-            total_equity = cash + value_portfolio
+            total_equity = cash + torch.sum(portfolio * stocks_next, dim=-1)
             total_equity_array.append(total_equity.item())
             cash_array.append(cash_after_sell)
-            equity_avg_array.append(value_portfolio_avg.item())
-            portfolio_array.append(portfolio.cpu().numpy())
+            equity_avg_array.append(torch.sum(avg_portfolio * stocks_next, dim=-1).item())
+            portfolio_array.append(deepcopy(portfolio.cpu().numpy()))
     
     # plot total equity
     fig, axs = plt.subplots(3)
@@ -298,8 +304,9 @@ def main(
     
 if __name__ == '__main__':
     main(
-        load_checkpoint=True,
-        num_epochs=0,
+        load_checkpoint=False,
+        file_ae=None,
+        num_epochs=1,
         hidden_dim=256,
         portfolio_input=True,
         learning_rate=1e-5,
