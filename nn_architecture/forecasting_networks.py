@@ -73,49 +73,57 @@ class TradeNet(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # network layers
-        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, dropout=0.0, batch_first=True)
+        self.lstm = nn.LSTM(hidden_dim, hidden_dim, 1, dropout=0.0, batch_first=True)
         if n_portfolio == 0:
             self.fc_in = nn.Linear(n_channels, hidden_dim)
         else:
             # intermediate step while encoding incoming stocks to encode also portfolio information into array
             self.fc_in1 = nn.Sequential(nn.Linear(n_channels, n_portfolio), nn.Sigmoid())
             self.fc_in2 = nn.Linear(n_portfolio, hidden_dim)
+        self.fc_hidden = nn.Module()
+        for i in range(num_layers):
+            self.fc_hidden.add_module(f'fc_hidden_{i}', nn.Linear(hidden_dim, hidden_dim))
+            self.fc_hidden.add_module(f'act_hidden_{i}', nn.ReLU())
         self.fc_out = nn.Linear(hidden_dim, self.n_channels_out)
         
         # activation
-        self.act_orders = nn.Tanh()
-        self.act_softmax = nn.Softmax(dim=-1)
-        self.act_buy = nn.ReLU()
-        self.act_sell = lambda x: torch.where(x < 0, x, torch.zeros_like(x))
+        self.act_tanh = nn.Tanh()
+        # self.act_softmax = nn.Softmax(dim=-1)
+        self.act_relu = nn.ReLU()
 
     def forward(self, stocks: Tensor, portfolio: Tensor=None) -> Tensor:
         '''Forward pass'''
+        # stocks = torch.flip(stocks, dims=[1])
         # Encode input
         if portfolio is None:
-            stocks = self.fc_in(stocks)
+            x = self.fc_in(stocks)
         else:
             # mark each entry of portfolio > 0 with 1 and rest with 0
-            portfolio = torch.where(portfolio > 0, torch.ones_like(portfolio), torch.zeros_like(portfolio))
-            stocks = self.fc_in1(stocks)
-            stocks = stocks + portfolio
-            stocks = self.fc_in2(stocks)
+            portfolio = torch.where(portfolio > 0, torch.ones_like(portfolio, dtype=torch.float32), torch.zeros_like(portfolio, dtype=torch.float32))
+            # portfolio_enc = self.fc_in2(portfolio)
+            # stocks = torch.cat((portfolio_enc, stocks), dim=1)
+            x = self.fc_in1(stocks)
+            x = x + portfolio
+            x = self.fc_in2(x)
 
         # Forward propagate LSTM
-        stocks = self.lstm(stocks)[0][:, -1, :]
+        x = self.lstm(x)[0][:, -1, :]
 
         # Decode the hidden state of the last time step
-        orders_all = self.act_orders(self.fc_out(stocks))
+        x = self.act_tanh(self.fc_out(x))
         
         # split orders into buy and sell orders
         # index_buy = torch.where(orders_all > 1)        
         # orders_all[index_buy] = self.activation_orders(orders_all[index_buy])
-        orders_buy = self.act_buy(orders_all)
+        orders_sell = self.act_relu(x*-1)
+        orders_buy = self.act_relu(x)
         # orders_buy = self.act_softmax(orders_buy)
         # scale all orders to sum up to 1 but keep 0s
         orders_buy = orders_buy / torch.sum(orders_buy, dim=-1, keepdim=True)
-        orders_sell = self.act_sell(orders_all)
-        if portfolio is not None:
-            orders_sell = orders_sell * portfolio.squeeze(1)
+        # orders_buy = self.act_softmax(orders_buy)
+        #orders_buy = orders_buy - torch.min(orders_buy, dim=-1, keepdim=True)[0]
+        # if portfolio is not None:
+        #     orders_sell = orders_sell * portfolio.squeeze(1)
         
         return orders_buy, orders_sell
     
